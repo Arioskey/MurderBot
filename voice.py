@@ -10,7 +10,7 @@ class Voice(commands.Cog):
         self.higher_admins = higher_admins
 
 
-    @commands.command(aliases=['silence'])
+    @commands.command(brief="Mutes a person", aliases=['silence'])
     async def mute(self, ctx, member:discord.Member=None):
         if member == None:
             member = ctx.author
@@ -23,7 +23,7 @@ class Voice(commands.Cog):
         await ctx.send(f"Muted {member.name}")
         return await member.edit(mute = True)
 
-    @commands.command(aliases=['unsilence'])
+    @commands.command(brief="Unmutes a person", aliases=['unsilence'])
     async def unmute(self, ctx, member:discord.Member=None):
         if member == None:
             member = ctx.author
@@ -36,7 +36,7 @@ class Voice(commands.Cog):
         await ctx.send(f"Unmuted {member.name}")
         return await member.edit(mute = False)
 
-    @commands.command(aliases=["muteall", "silenceall", "silence_all"])
+    @commands.command(brief="Mutes all", aliases=["muteall", "silenceall", "silence_all"])
     async def mute_all(self, ctx):
         if ctx.author not in self.higher_admins:
             return await ctx.send("You do not have permission to mute all")
@@ -46,7 +46,7 @@ class Voice(commands.Cog):
         await ctx.send("Muted all")
         return
 
-    @commands.command(aliases=["unmuteall", "unsilenceall", "unsilence_all"])
+    @commands.command(brief="Unmutes all", aliases=["unmuteall", "unsilenceall", "unsilence_all"])
     async def unmute_all(self, ctx):
         if ctx.author not in self.higher_admins:
             return await ctx.send("You do not have permission to unmute all")
@@ -56,7 +56,7 @@ class Voice(commands.Cog):
         await ctx.send("Unmuted all")
         return
         
-    @commands.command()
+    @commands.command(brief="Deafens a person")
     async def deafen(self, ctx, member:discord.Member=None):
         if member == None:
             member = ctx.author
@@ -70,7 +70,7 @@ class Voice(commands.Cog):
         await ctx.send(f"Deafened {member.name}")
         return await member.edit(deafen = True)
 
-    @commands.command()
+    @commands.command(brief="Undeafens a person")
     async def undeafen(self, ctx, member:discord.Member=None):
         if member == None:
             member = ctx.author
@@ -83,7 +83,7 @@ class Voice(commands.Cog):
         await ctx.send(f"Undeafened {member.name}")
         return await member.edit(deafen = False)
 
-    @commands.command(aliases=["deafenall"])
+    @commands.command(brief="Deafens all", aliases=["deafenall"])
     async def deafen_all(self, ctx):
         if ctx.author not in self.higher_admins:
             return await ctx.send("You do not have permission to deafen all")
@@ -93,7 +93,7 @@ class Voice(commands.Cog):
         await ctx.send("Deafened all")
         return
 
-    @commands.command(aliases=["undeafenall"])
+    @commands.command(brief="Undeafens all", aliases=["undeafenall"])
     async def undeafen_all(self, ctx):
         if ctx.author not in self.higher_admins:
             return await ctx.send("You do not have permission to undeafen all")
@@ -103,7 +103,7 @@ class Voice(commands.Cog):
         await ctx.send("Undeafened all")
         return
 
-    @commands.command(aliases=["dc"])
+    @commands.command(brief="Disconnects a user", aliases=["dc"])
     async def disconnect(self, ctx, member:discord.Member=None, *, reason:str=None):
         if member == None:
             member = ctx.author
@@ -117,7 +117,7 @@ class Voice(commands.Cog):
             await ctx.send(f"Reason: {reason}")
         return
 
-    @commands.command(aliases=["dca", "dc_all", "dc_a", "dcall"])
+    @commands.command(brief="Disconnects all users", aliases=["dca", "dc_all", "dc_a", "dcall"])
     async def disconnect_all(self, ctx, *, reason:str=None):
         if ctx.author not in self.higher_admins:
             return await ctx.send("You do not have permission to deafen all")
@@ -129,7 +129,7 @@ class Voice(commands.Cog):
             await ctx.send(f"Reason: {reason}")
         return
     #Bot join VC
-    @commands.command()
+    @commands.command(brief="Make bot join a channel")
     async def join(self, ctx, *, channel:str=None):
 
         #Check if the channel argument is empty
@@ -151,7 +151,7 @@ class Voice(commands.Cog):
         await channel.connect()
     
     #Bot leave VC
-    @commands.command()
+    @commands.command(brief="Make bot leave current channel")
     async def leave(self, ctx):
         #Get current vc bot is in
         vc = discord.utils.get(self.bot.voice_clients, guild=ctx.guild)

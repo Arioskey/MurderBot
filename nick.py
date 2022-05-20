@@ -50,7 +50,7 @@ class Nick(commands.Cog):
             fd.close()
         return False
     
-    @commands.command(aliases=["check_p", "check_perm", "checkp", "checkperm"])
+    @commands.command(brief="Checks a user for permanent nickname", aliases=["check_p", "check_perm", "checkp", "checkperm"])
     async def check_perm_nick(self, ctx, member:discord.Member) -> bool:
         user = member.id
         if self.check_nickname(user, "permanent"):
@@ -60,7 +60,7 @@ class Nick(commands.Cog):
             await ctx.send(f"{member.name} does NOT HAVE a permanent nickname!")
             return False
 
-    @commands.command(aliases=["clear_p", "clear_perm", "clearp", "clearperm"])
+    @commands.command(brief="Clears a user's permanent nickname", aliases=["clear_p", "clear_perm", "clearp", "clearperm"])
     async def clear_perm_nick(self, ctx, member:discord.Member):
         user = member.id
         if self.check_nickname(user, "permanent"):
@@ -81,7 +81,7 @@ class Nick(commands.Cog):
                 fd.write(line)
             fd.close()
 
-    @commands.command(aliases=["set_p", "set_perm", "setp", "setperm"])
+    @commands.command(brief="Sets a user's permanent nickname", aliases=["set_p", "set_perm", "setp", "setperm"])
     async def set_perm_nick(self, ctx, member:discord.Member, *, nickname:str):
         user = member.id
         if self.check_nickname(user, "permanent"):
@@ -101,7 +101,7 @@ class Nick(commands.Cog):
 
         
 
-    @commands.command(aliases=["check_a", "check_alt", "checka", "checkalt"])
+    @commands.command(brief="Checks a user for an alternating nickname", aliases=["check_a", "check_alt", "checka", "checkalt"])
     async def check_alt_nick(self, ctx, member:discord.Member):
         user = member.id
         if self.check_nickname(user, "alt"):
@@ -120,7 +120,7 @@ class Nick(commands.Cog):
 
         
 
-    @commands.command(aliases=["set_a", "set_alt", "seta", "setalt"])
+    @commands.command(brief="Sets a user's alternating nickname", aliases=["set_a", "set_alt", "seta", "setalt"])
     async def set_alt_nick(self, ctx, member:discord.Member, nick1:str, nick2:str, time:float = 3):
         user = member.id
         self.time = time
@@ -147,7 +147,7 @@ class Nick(commands.Cog):
     
         await ctx.send(f"Changing {member.name}'s nickname!")
 
-    @commands.command(aliases=["clear_a", "clear_alt", "cleara", "clearalt"])
+    @commands.command(brief="Clears a user's alternating nickname", aliases=["clear_a", "clear_alt", "cleara", "clearalt"])
     async def clear_alt_nick(self, ctx, member:discord.Member):
         user = member.id
         if self.check_nickname(user, "alt"):

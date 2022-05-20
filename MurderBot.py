@@ -156,14 +156,14 @@ async def on_command_error(ctx, error):
 
 
 #Send method (Move to another class)
-@bot.command()
+@bot.command(brief="Send a message via the bot to a channel")
 async def send(ctx, channel:discord.TextChannel, *, message):
     await ctx.message.delete()
     #Send's message to given channel
     await channel.send(message)
 
 #Ping pong
-@bot.command()
+@bot.command(brief="Pong")
 async def ping(ctx, member:discord.Member=None, channel:discord.TextChannel=None):
     #Ping's author
     if member == None:
@@ -178,7 +178,7 @@ async def ping(ctx, member:discord.Member=None, channel:discord.TextChannel=None
         await channel.send(f"Where is <@{member.id}>?")
 
 
-@bot.command()
+@bot.command(brief="Moves everyone away from target")
 async def move_all_away(ctx, member:discord.Member=None):
     #Check if no target
     if member == None:
@@ -200,7 +200,7 @@ async def move_all_away(ctx, member:discord.Member=None):
 
 
  
-@bot.command(aliases = ["rc"])
+@bot.command(brief="Rollercoasts a user", aliases = ["rc"])
 async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
     #Check if no target
     if member == None:
@@ -236,7 +236,7 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
 
 
 #Checks for admins            
-@bot.command()
+@bot.command(brief="Checks the current admins")
 async def check_admins(ctx):
     await ctx.send("Checking admins...")
     checkAdmin()
@@ -252,7 +252,7 @@ async def check_admins(ctx):
         await ctx.send("No admins found!")
     
 #Send a private dm to a person
-@bot.command()
+@bot.command("Send's an annonymous dm to a user")
 async def send_dm(ctx, user:discord.Member, *, message: str):
     #Hide your message
     await ctx.message.delete()
@@ -261,7 +261,7 @@ async def send_dm(ctx, user:discord.Member, *, message: str):
     #Send's dm to user
     await channel.send(message)
 
-@bot.command(brief="Plays a song")
+@bot.command(brief="Plays audio from bot")
 async def play(ctx, song:str):
     current_vc = ctx.author.voice.channel
     vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
@@ -273,7 +273,7 @@ async def play(ctx, song:str):
     else:
         vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"))
 
-@bot.command()
+@bot.command(brief="Pauses the audio from bot")
 async def pause(ctx):
     voice = discord.utils.get(bot.voice_clients, guild = ctx.guild)
     if voice is None:
@@ -283,7 +283,7 @@ async def pause(ctx):
     else:
         await ctx.send("Currently no audio is playing")
 
-@bot.command()
+@bot.command(brief="Stops the audio from bot")
 async def stop(ctx):
     voice = discord.utils.get(bot.voice_clients, guild = ctx.guild)
     if voice is None:
@@ -304,7 +304,7 @@ async def on_message_delete(message):
      del snipe_message_content[message.channel.id]
 
 
-@bot.command()
+@bot.command(brief="Snipes the last deleted message")
 async def snipe(ctx, channel:discord.TextChannel=None):
     if channel == None:
         channel = ctx.channel
