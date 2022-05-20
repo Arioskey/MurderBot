@@ -3,9 +3,7 @@ from ast import alias
 import asyncio
 from tempfile import TemporaryFile
 import discord
-import os
-import youtube_dl
-
+#random comments
 from discord import FFmpegPCMAudio
 from argparse import ArgumentError
 from discord.ext import commands, tasks
