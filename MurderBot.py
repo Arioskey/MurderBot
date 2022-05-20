@@ -27,7 +27,7 @@ alt_file = "Memory/alt.txt"
 players = {}
 
 #Bot setup
-bot = commands.Bot(command_prefix='.', intents=discord.Intents.all(), case_insensitive=True, strip_after_prefix=True)
+bot = commands.Bot(command_prefix='.', intents=discord.Intents.all(), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
 
 
 #Check Admin Method
@@ -69,6 +69,7 @@ async def on_ready():
     perm_nicknames = []
     lists = [perm_nicknames, alt_nicknames]
     higher_admins = []
+
     
     #Tell Console we have logged in
     print(f"We have logged in as {bot.user}")
@@ -291,7 +292,28 @@ async def stop(ctx):
 
     await ctx.send("Stopped audio")
 
+snipe_message_author = {}
+snipe_message_content = {}
 
+@bot.event
+async def on_message_delete(message):
+     snipe_message_author[message.channel.id] = message.author
+     snipe_message_content[message.channel.id] = message.content
+     await asyncio.sleep(60)
+     del snipe_message_author[message.channel.id]
+     del snipe_message_content[message.channel.id]
+
+
+@bot.command()
+async def snipe(ctx, channel:discord.TextChannel=None):
+    if channel == None:
+        channel = ctx.channel
+    try: #This piece of code is run if the bot finds anything in the dictionary
+        em = discord.Embed(name = f"Last deleted message in #{channel.name}", description = snipe_message_content[channel.id])
+        em.set_footer(text = f"This message was sent by {snipe_message_author[channel.id]}")
+        await ctx.send(embed = em)
+    except KeyError: #This piece of code is run if the bot doesn't find anything in the dictionary
+        await ctx.send(f"There are no recently deleted messages in #{channel.name}")
 
 
 #Run's the bot
