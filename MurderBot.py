@@ -18,7 +18,7 @@ from random import randint
 from words import allPhrases
 
 # Variables
-token = 'OTc1Mzc4MTAwNjMwMjE2NzA0.GMnQja.-sXdYIJdBQMY5KH5zkJFpYqG7WFqLe1O7y93SU'
+token = open(".git/token.txt","r").read()
 target = 694382869367226368
 options = allPhrases()
 global permanent_file, alt_file
