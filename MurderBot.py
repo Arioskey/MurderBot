@@ -297,11 +297,16 @@ snipe_message_content = {}
 
 @bot.event
 async def on_message_delete(message):
-     snipe_message_author[message.channel.id] = message.author
-     snipe_message_content[message.channel.id] = message.content
-     await asyncio.sleep(60)
-     del snipe_message_author[message.channel.id]
-     del snipe_message_content[message.channel.id]
+    if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content:
+        snipe_message_author[message.channel.id] = [message.author]
+        snipe_message_content[message.channel.id] = [message.content]
+    else:
+
+        snipe_message_author[message.channel.id].append(message.author)
+        snipe_message_content[message.channel.id].append(message.content)
+        # await asyncio.sleep(60)
+        # del snipe_message_author[message.channel.id]
+        # del snipe_message_content[message.channel.id]
 
 
 @bot.command(brief="Snipes the last deleted message")
@@ -309,12 +314,20 @@ async def snipe(ctx, channel:discord.TextChannel=None):
     if channel == None:
         channel = ctx.channel
     try: #This piece of code is run if the bot finds anything in the dictionary
-        em = discord.Embed(name = f"Last deleted message in #{channel.name}", description = snipe_message_content[channel.id])
-        em.set_footer(text = f"This message was sent by {snipe_message_author[channel.id]}")
-        await ctx.send(embed = em)
+        for index, value in enumerate(snipe_message_content[channel.id]):
+            em = discord.Embed(name = f"Deleted message in #{channel.name}", description = value)
+            em.set_footer(text = f"This message was sent by {snipe_message_author[channel.id][index].name}")
+            await ctx.send(embed = em)
     except KeyError: #This piece of code is run if the bot doesn't find anything in the dictionary
         await ctx.send(f"There are no recently deleted messages in #{channel.name}")
 
+@bot.command(brief="Clears the snipe log", aliases=["snipeclear","snipec", "sc"])
+async def snipe_clear(ctx):
+    if ctx.message.author not in higher_admins:
+        return await ctx.send("You do not have permission to clear snipe log")
+    snipe_message_author.clear()
+    snipe_message_content.clear()
+    return await ctx.send("Cleared snipe log")
 
 #Run's the bot
 bot.run(token)
