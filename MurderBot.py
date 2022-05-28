@@ -6,7 +6,8 @@ import asyncio
 from tempfile import TemporaryFile
 import discord
 import os
-import youtube_dl
+import datetime
+import time
 
 from discord import FFmpegPCMAudio
 from argparse import ArgumentError
@@ -198,6 +199,34 @@ async def move_all_away(ctx, member:discord.Member=None):
                 await user.move_to(guild.voice_channels[value])
             return
 
+global coasterUsers
+coasterUsers = []
+global timedOutMembers
+timedOutMembers = {}
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    channel = discord.utils.get(bot.get_all_channels(), name="bot_commands")
+    if not before.channel and after.channel:
+        print(f'{member} has joined the vc')
+        if member.id in timedOutMembers:
+            await member.move_to(None, reason="Timed out")
+            await channel.send(f"{member} tried to rejoin VC but had too many injuries from falling off the coaster!")
+            if member.id in coasterUsers:
+                coasterUsers.remove(member.id)
+            try:
+                await channel.send(f"Please wait {10 - int(time.time() - timedOutMembers[member.id])} seconds")
+            except KeyError:
+                pass
+    if before.channel and not after.channel and member.id in coasterUsers:
+
+        await channel.send(f'{member} left WHILE COASTING!')
+        timedOutMembers[member.id] = time.time()
+        coasterUsers.remove(member.id)
+        await asyncio.sleep(10)
+        timedOutMembers.pop(member.id)
+
+
 
  
 @bot.command(brief="Rollercoasts a user", aliases = ["rc"])
@@ -214,15 +243,17 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
     if movetimes < 1:
         return await ctx.send("Please move at least 1 time")
 
-    if movetimes > 15:
+    if movetimes > 15 and ctx.author not in higher_admins:
         return await ctx.send("You can only move up to 15 times!")
 
+    coasterUsers.append(member.id)
     #name = member.display_name
     value = randint(0,2)
-
+    await ctx.send(f"Coasting {movetimes} times")
     await ctx.send(f"Enjoy the ride <@{member.id}>!!!")
     #print(movetimes)
     for i in range(movetimes):
+        print(i+1)
         prev = value
         while value == prev:
             value = randint(0, 2)
@@ -231,6 +262,8 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
     await asyncio.sleep(1)
     if member.voice.channel != initial_channel:
         await member.move_to(initial_channel)
+    if member.id in coasterUsers:
+        coasterUsers.remove(member.id)
 
 
 
@@ -252,7 +285,7 @@ async def check_admins(ctx):
         await ctx.send("No admins found!")
     
 #Send a private dm to a person
-@bot.command("Send's an annonymous dm to a user")
+@bot.command(brief="Send's an annonymous dm to a user")
 async def send_dm(ctx, user:discord.Member, *, message: str):
     #Hide your message
     await ctx.message.delete()
