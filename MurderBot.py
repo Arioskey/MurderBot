@@ -45,6 +45,8 @@ def checkAdmin():
             newAdmin(member)
         if adminRole2 in member.roles:
             newHigherAdmin(member)
+    if member.id == 309198720606404609:
+        newHigherAdmin(member)
 
 #Make Admin Method
 def newAdmin(admin:discord.Member):
@@ -139,7 +141,9 @@ async def on_message(message):
         #Send a random message from rohit's past
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
     #If they valid then let them use commands (also has to be in bot commands)
-    if message.author in admins and message.channel.id == 975385087677960263:
+    if message.author in higher_admins:
+        await bot.process_commands(message)
+    elif message.author in admins and message.channel.id == 975385087677960263:
         await bot.process_commands(message)
 
 #Error Handling
