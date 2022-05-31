@@ -15,6 +15,7 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from nick import Nick
 from voice import Voice
+from software import Software
 from random import randint
 from words import allPhrases
 
@@ -45,8 +46,8 @@ def checkAdmin():
             newAdmin(member)
         if adminRole2 in member.roles:
             newHigherAdmin(member)
-    if member.id == 309198720606404609:
-        newHigherAdmin(member)
+        if member.id == 309198720606404609:
+            newHigherAdmin(member)
 
 #Make Admin Method
 def newAdmin(admin:discord.Member):
@@ -117,6 +118,7 @@ async def on_ready():
     #Initialise nick commands class
     bot.add_cog(Nick(bot, lists))
     bot.add_cog(Voice(bot, higher_admins))
+    bot.add_cog(Software(bot))
     if len(alt_nicknames) != 0:
         nick_cog = bot.get_cog("Nick")
         await nick_cog.set_alt_nick_on_ready()
@@ -239,6 +241,9 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
     if member == None:
         member = ctx.author
 
+    if ctx.author.id == 694382869367226368:
+        if member.id == 288884848012296202:
+            member = ctx.author
     initial_channel = member.voice.channel
 
     if member.voice is None:
@@ -300,9 +305,10 @@ async def send_dm(ctx, user:discord.Member, *, message: str):
 
 @bot.command(brief="Plays audio from bot")
 async def play(ctx, song:str):
-    current_vc = ctx.author.voice.channel
+
     vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
     if vc is None:
+        current_vc = ctx.author.voice.channel
         await current_vc.connect()
     vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
     if vc.is_paused():
@@ -334,7 +340,9 @@ snipe_message_content = {}
 
 @bot.event
 async def on_message_delete(message):
-    if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content:
+    print(f"A message was deleted in channel {message.channel}")
+    print(f"{message.author} said:\n{message.content}")
+    if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content and not message.content.startswith("."):
         snipe_message_author[message.channel.id] = [message.author]
         snipe_message_content[message.channel.id] = [message.content]
     else:
