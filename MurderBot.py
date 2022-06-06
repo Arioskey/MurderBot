@@ -242,8 +242,8 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
         member = ctx.author
 
     if ctx.author.id == 694382869367226368:
-        if member.id == 288884848012296202:
-            member = ctx.author
+        #if member.id == 288884848012296202:
+        member = ctx.author
     initial_channel = member.voice.channel
 
     if member.voice is None:
@@ -305,7 +305,6 @@ async def send_dm(ctx, user:discord.Member, *, message: str):
 
 @bot.command(brief="Plays audio from bot")
 async def play(ctx, song:str):
-
     vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
     if vc is None:
         current_vc = ctx.author.voice.channel
@@ -342,6 +341,9 @@ snipe_message_content = {}
 async def on_message_delete(message):
     print(f"A message was deleted in channel {message.channel}")
     print(f"{message.author} said:\n{message.content}")
+    if message.author.id == 975378100630216704:
+        await message.channel.send(message.content)
+        return
     if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content and not message.content.startswith("."):
         snipe_message_author[message.channel.id] = [message.author]
         snipe_message_content[message.channel.id] = [message.content]

@@ -21,6 +21,12 @@ class Voice(commands.Cog):
         elif member.voice.mute:
             return await ctx.send("User is already muted!")
         await ctx.send(f"Muted {member.name}")
+        vc = discord.utils.get(self.bot.voice_clients, guild = ctx.guild)
+        if vc is None:
+            current_vc = ctx.author.voice.channel
+            await current_vc.connect()
+        vc = discord.utils.get(self.bot.voice_clients, guild = ctx.guild)
+        vc.play(discord.FFmpegPCMAudio("Songs/silence.mp3"))
         return await member.edit(mute = True)
 
     @commands.command(brief="Unmutes a person", aliases=['unsilence'])
