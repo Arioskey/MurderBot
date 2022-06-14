@@ -303,6 +303,15 @@ async def send_dm(ctx, user:discord.Member, *, message: str):
     #Send's dm to user
     await channel.send(message)
 
+@bot.command(brief="Lists playable sounds")
+async def list(ctx):
+    sounds = []
+    sound_list = os.listdir("Songs")
+    for i, x in enumerate(sound_list):
+        x = x.replace(".mp3", "")
+        sounds.append(x)
+    await ctx.send(sounds)
+
 @bot.command(brief="Plays audio from bot")
 async def play(ctx, song:str):
     vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
@@ -344,7 +353,9 @@ async def on_message_delete(message):
     if message.author.id == 975378100630216704:
         await message.channel.send(message.content)
         return
-    if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content and not message.content.startswith("."):
+    if message.content.startswith("."):
+        return
+    if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content:
         snipe_message_author[message.channel.id] = [message.author]
         snipe_message_content[message.channel.id] = [message.content]
     else:

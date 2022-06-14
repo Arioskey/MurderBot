@@ -26,7 +26,11 @@ class Voice(commands.Cog):
             current_vc = ctx.author.voice.channel
             await current_vc.connect()
         vc = discord.utils.get(self.bot.voice_clients, guild = ctx.guild)
-        vc.play(discord.FFmpegPCMAudio("Songs/silence.mp3"))
+        if not vc.is_playing():
+            if member.id == 694382869367226368:
+                vc.play(discord.FFmpegPCMAudio("Songs/shut.mp3"))
+            else:
+                vc.play(discord.FFmpegPCMAudio("Songs/silence.mp3"))
         return await member.edit(mute = True)
 
     @commands.command(brief="Unmutes a person", aliases=['unsilence'])
