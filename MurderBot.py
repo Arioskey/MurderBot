@@ -3,6 +3,7 @@ version = "1.9.5"
 #Imports
 from ast import alias
 import asyncio
+from posixpath import basename
 from tempfile import TemporaryFile
 import discord
 import os
@@ -18,6 +19,7 @@ from voice import Voice
 from software import Software
 from random import randint
 from words import allPhrases
+from banned import Banned
 
 # Variables
 token = open(".git/token.txt","r").read()
@@ -224,6 +226,28 @@ async def on_voice_state_update(member, before, after):
                 await channel.send(f"Please wait {10 - int(time.time() - timedOutMembers[member.id])} seconds")
             except KeyError:
                 pass
+
+        if member.id in bannedMembers:
+            memberPos = bannedMembers.index(member.id)
+            ban = bans[memberPos]
+            if after.channel == ban.call:
+                await member.move_to(None, reason="Timed out")
+                await channel.send(f"{member} tried to rejoin {after.channel} but is banned")
+
+                try:
+                    await channel.send(f"Please wait {ban.banTime - int(time.time() - ban.realTime)} seconds")
+                except KeyError:
+                    pass
+
+    if before.channel and not after.channel and member.id in bannedMembers:
+        memberPos = bannedMembers.index(member.id)
+        ban = bans[memberPos]
+        ban.realTime = time.time()
+        await asyncio.sleep(ban.banTime)
+        bannedMembers.remove(bannedMembers)
+        bans.remove(ban)
+
+    # On disconnect while coasting
     if before.channel and not after.channel and member.id in coasterUsers:
 
         await channel.send(f'{member} left WHILE COASTING!')
@@ -273,6 +297,26 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
         await member.move_to(initial_channel)
     if member.id in coasterUsers:
         coasterUsers.remove(member.id)
+
+global bannedMembers
+bannedMembers = []
+global bans
+bans = []
+
+@bot.command(brief = "Keep someone out of a call")
+async def ban(ctx, member:discord.Member=None, call:discord.VoiceChannel=None, bantime:int=10):
+    if member == None:
+        member = ctx.author
+    if call == None:
+        call = ctx.author.voice.channel
+    if call == None:
+        call = discord.utils.get(bot.get_all_channels(), name="Noncess")
+    if member.voice.channel == call:
+        await member.move_to(None, reason="Timed out")
+
+    newBan = Banned(bot, member, call, bantime, time.time())
+    bannedMembers.append(member.id)
+    bans.append(newBan)
 
 
 
