@@ -215,8 +215,36 @@ timedOutMembers = {}
 @bot.event
 async def on_voice_state_update(member, before, after):
     channel = discord.utils.get(bot.get_all_channels(), name="bot_commands")
+    #On join
     if not before.channel and after.channel:
         print(f'{member} has joined the vc')
+        pass
+    #On disconnect
+    if before.channel and not after.channel:
+        if member.id in bannedMembers:
+            memberPos = bannedMembers.index(member.id)
+            ban = bans[memberPos]
+            await asyncio.sleep(ban.banTime)
+            try:
+                bannedMembers.remove(member.id)
+                bans.pop(memberPos)
+            except ValueError:
+                pass
+            
+        if member.id in coasterUsers:
+            await channel.send(f'{member} left WHILE COASTING!')
+            timedOutMembers[member.id] = time.time()
+            coasterUsers.remove(member.id)
+            await asyncio.sleep(10)
+            timedOutMembers.pop(member.id)
+
+    #Moved Channel
+    if before.channel and after.channel:
+        pass
+
+    #On channel connect
+    if after.channel:
+        print(f'{member} has joined {after.channel}')
         if member.id in timedOutMembers:
             await member.move_to(None, reason="Timed out")
             await channel.send(f"{member} tried to rejoin VC but had too many injuries from falling off the coaster!")
@@ -230,31 +258,14 @@ async def on_voice_state_update(member, before, after):
         if member.id in bannedMembers:
             memberPos = bannedMembers.index(member.id)
             ban = bans[memberPos]
-            if after.channel == ban.call:
+            if after.channel == ban.channel:
                 await member.move_to(None, reason="Timed out")
-                await channel.send(f"{member} tried to rejoin {after.channel} but is banned")
+                await channel.send(f"{member} tried to rejoin {ban.channel} but is banned")
 
                 try:
                     await channel.send(f"Please wait {ban.banTime - int(time.time() - ban.realTime)} seconds")
                 except KeyError:
                     pass
-
-    if before.channel and not after.channel and member.id in bannedMembers:
-        memberPos = bannedMembers.index(member.id)
-        ban = bans[memberPos]
-        ban.realTime = time.time()
-        await asyncio.sleep(ban.banTime)
-        bannedMembers.remove(bannedMembers)
-        bans.remove(ban)
-
-    # On disconnect while coasting
-    if before.channel and not after.channel and member.id in coasterUsers:
-
-        await channel.send(f'{member} left WHILE COASTING!')
-        timedOutMembers[member.id] = time.time()
-        coasterUsers.remove(member.id)
-        await asyncio.sleep(10)
-        timedOutMembers.pop(member.id)
 
 
 
@@ -303,20 +314,21 @@ bannedMembers = []
 global bans
 bans = []
 
-@bot.command(brief = "Keep someone out of a call")
-async def ban(ctx, member:discord.Member=None, call:discord.VoiceChannel=None, bantime:int=10):
+@bot.command(brief = "Keep someone out of a voice channel")
+async def ban(ctx, member:discord.Member=None, bantime:int=10, channel:discord.VoiceChannel=None):
+    if member.id in bannedMembers:
+        return await ctx.send(f"{member} is already banned LOL")
     if member == None:
-        member = ctx.author
-    if call == None:
-        call = ctx.author.voice.channel
-    if call == None:
-        call = discord.utils.get(bot.get_all_channels(), name="Noncess")
-    if member.voice.channel == call:
+        member = guild.get_member(694382869367226368)
+    if channel == None:
+        channel = ctx.author.voice.channel
+    if member.voice.channel == channel:
         await member.move_to(None, reason="Timed out")
-
-    newBan = Banned(bot, member, call, bantime, time.time())
+    newBan = Banned(bot, member, channel, bantime)
     bannedMembers.append(member.id)
     bans.append(newBan)
+
+
 
 
 
