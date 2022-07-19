@@ -82,4 +82,55 @@ class CanvasCog(commands.Cog):
         #Send's dm to user
         await channel.send(f"Grades for **{user.name}**")
         await channel.send(grades_string)
+
+    @commands.command(brief="Pulls latest announcements", aliases=["an"])
+    async def announcements(self, ctx):
+        if not (canvas := self.checkCanvasUser(ctx)):
+            return await ctx.send("User's not registered!")
+        
+        user = canvas.get_current_user()
+        a = user.get_favorite_courses()
+        #print(len(list(a)))
+        course_ids = []
+        for i in a:
+            course_ids.append(i.id)
+
+        announcements = canvas.get_announcements([i for i in course_ids])
+
+        announce = {}
+        print(len(list(announcements)))
+        for i, c in enumerate(announcements):
+            html = c.message
+            soup = BeautifulSoup(html, features="html.parser")
+
+            # kill all script and style elements
+            for script in soup(["script", "style"]):
+                script.extract()    # rip it out
+
+            # get text
+            text = soup.get_text()
+
+            # break into lines and remove leading and trailing space on each
+            lines = (line.strip() for line in text.splitlines())
+            # break multi-headlines into a line each
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            # drop blank lines
+            text = '\n'.join(chunk for chunk in chunks if chunk)
+
+            if c._parent_id not in announce:
+                announce[c._parent_id] = list()
+            if c.read_state == "unread":
+                announce[c._parent_id].append(text)
+                c.mark_as_read()
+
+
+        for key, value in announce.items():
+            await ctx.send(f"**{canvas.get_course(key).name}**")
+            for i, x in enumerate(value):
+                if len(x) > 1500:
+                    await ctx.send(f"```{x[0:1000]}...```")
+                else:
+                    await ctx.send(f"```{x}```")
+
+
         
