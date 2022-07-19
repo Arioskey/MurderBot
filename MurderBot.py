@@ -3,8 +3,7 @@ version = "1.9.5"
 #Imports
 from ast import alias
 import asyncio
-from posixpath import basename
-from tempfile import TemporaryFile
+
 import discord
 import os
 import datetime
@@ -20,6 +19,7 @@ from software import Software
 from random import randint
 from words import allPhrases
 from banned import Banned
+from canvas import CanvasCog
 
 # Variables
 token = open(".git/token.txt","r").read()
@@ -121,6 +121,7 @@ async def on_ready():
     bot.add_cog(Nick(bot, lists))
     bot.add_cog(Voice(bot, higher_admins))
     bot.add_cog(Software(bot))
+    bot.add_cog(CanvasCog(bot))
     if len(alt_nicknames) != 0:
         nick_cog = bot.get_cog("Nick")
         await nick_cog.set_alt_nick_on_ready()
@@ -145,7 +146,7 @@ async def on_message(message):
         #Send a random message from rohit's past
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
     #If they valid then let them use commands (also has to be in bot commands)
-    if message.author in higher_admins:
+    if message.author in higher_admins or message.author.id == 288884848012296202:
         await bot.process_commands(message)
     elif message.author in admins and message.channel.id == 975385087677960263:
         await bot.process_commands(message)
@@ -217,10 +218,10 @@ async def on_voice_state_update(member, before, after):
     channel = discord.utils.get(bot.get_all_channels(), name="bot_commands")
     #On join
     if not before.channel and after.channel:
-        print(f'{member} has joined the vc')
         pass
     #On disconnect
     if before.channel and not after.channel:
+        print(f'{member} has left {before.channel}')
         if member.id in bannedMembers:
             memberPos = bannedMembers.index(member.id)
             ban = bans[memberPos]
@@ -404,12 +405,12 @@ snipe_message_content = {}
 
 @bot.event
 async def on_message_delete(message):
+    if message.content.startswith("."):
+        return
     print(f"A message was deleted in channel {message.channel}")
     print(f"{message.author} said:\n{message.content}")
     if message.author.id == 975378100630216704:
-        await message.channel.send(message.content)
-        return
-    if message.content.startswith("."):
+        #await message.channel.send(message.content)
         return
     if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content:
         snipe_message_author[message.channel.id] = [message.author]
