@@ -98,6 +98,7 @@ class CanvasCog(commands.Cog):
         announcements = canvas.get_announcements([i for i in course_ids])
 
         announce = {}
+        announce_counter = 0
         print(len(list(announcements)))
         for i, c in enumerate(announcements):
             html = c.message
@@ -120,17 +121,20 @@ class CanvasCog(commands.Cog):
             if c._parent_id not in announce:
                 announce[c._parent_id] = list()
             if c.read_state == "unread":
+                announce_counter += 1
                 announce[c._parent_id].append(text)
                 c.mark_as_read()
 
-
-        for key, value in announce.items():
-            await ctx.send(f"**{canvas.get_course(key).name}**")
-            for i, x in enumerate(value):
-                if len(x) > 1500:
-                    await ctx.send(f"```{x[0:1000]}...```")
-                else:
-                    await ctx.send(f"```{x}```")
+        if announce_counter > 0:
+            for key, value in announce.items():
+                await ctx.send(f"**{canvas.get_course(key).name}**")
+                for i, x in enumerate(value):
+                    if len(x) > 1500:
+                        await ctx.send(f"```{x[0:1000]}...```")
+                    else:
+                        await ctx.send(f"```{x}```")
+        else:
+            await ctx.send("You have no unread announcements.")
 
 
         
