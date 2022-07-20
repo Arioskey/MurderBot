@@ -445,7 +445,11 @@ async def snipe_clear(ctx):
     return await ctx.send("Cleared snipe log")
 
 #Run's the bot
-bot.run(token)
+try:
+    bot.run(token)
+except:
+    import traceback
+    traceback.print_exc()
 
 
 
