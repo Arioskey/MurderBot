@@ -11,6 +11,11 @@ import time
 
 API_URL = "https://auckland.instructure.com/"
 
+class CanvasUser(Canvas):
+    def __init__(self, base_url, access_token):
+        super().__init__(base_url, access_token)
+        #By default turn off announcement notifications
+        self.notifications = False
 
 class CanvasCog(commands.Cog):
     def __init__(self, bot):
@@ -18,9 +23,10 @@ class CanvasCog(commands.Cog):
         self.guild = self.bot.guilds[0]
         tokens = open(".git/canvas token.txt","r").readlines()
         self.canvas_instances = {
-            "238063640601821185": Canvas(API_URL,tokens[0]), #aaron
-            "288884848012296202": Canvas(API_URL,tokens[1]) #elise
+            "238063640601821185": CanvasUser(API_URL,tokens[0]), #aaron
+            "288884848012296202": CanvasUser(API_URL,tokens[1]) #elise
             }
+        self.check_announcements.start()
 
     def checkCanvasUser(self, ctx):
         for key, value in self.canvas_instances.items():
@@ -33,14 +39,14 @@ class CanvasCog(commands.Cog):
 
         if not isinstance(ctx.channel, discord.channel.DMChannel):
             await ctx.message.delete()
-        if isinstance(self.checkCanvasUser(ctx), Canvas):
+        if isinstance(self.checkCanvasUser(ctx), CanvasUser):
             if isinstance(ctx.channel, discord.channel.DMChannel):
                 channel = await ctx.author.create_dm()
                 return await channel.send("You already have registered")
             else:
                 return await ctx.send("User already registered")
 
-        newUser = Canvas(API_URL, token)
+        newUser = CanvasUser(API_URL, token)
 
         try:
             newUser.get_course(1)
@@ -83,58 +89,127 @@ class CanvasCog(commands.Cog):
         await channel.send(f"Grades for **{user.name}**")
         await channel.send(grades_string)
 
-    @commands.command(brief="Pulls latest announcements", aliases=["an"])
-    async def announcements(self, ctx):
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
+    def cleanText(self, text):
+        soup = BeautifulSoup(text, features="html.parser")
+
+        # kill all script and style elements
+        for script in soup(["script", "style"]):
+            script.extract()    # rip it out
+
+        # get text
+        text = soup.get_text()
+
+        # break into lines and remove leading and trailing space on each
+        lines = (line.strip() for line in text.splitlines())
+        # break multi-headlines into a line each
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        # drop blank lines
+        text = '\n'.join(chunk for chunk in chunks if chunk)
         
+        return text
+
+    def get_announcements(self, canvas: CanvasUser):
+        # Gets the current user from canvas
         user = canvas.get_current_user()
-        a = user.get_favorite_courses()
-        #print(len(list(a)))
+        # Gets the favourite courses of user
+        courses = user.get_favorite_courses()
+        # Empty course id lists
         course_ids = []
-        for i in a:
+        # Get course ids and put in list
+        for i in courses:
             course_ids.append(i.id)
 
         announcements = canvas.get_announcements([i for i in course_ids])
+        return announcements
 
-        announce = {}
-        announce_counter = 0
-        print(len(list(announcements)))
-        for i, c in enumerate(announcements):
-            html = c.message
-            soup = BeautifulSoup(html, features="html.parser")
+    #Announcement function
+    def announcement(self, canvas: CanvasUser) -> list:
+            announcements = self.get_announcements(canvas)
+            
+            announcements_dict = {}
+            announce_counter = 0
 
-            # kill all script and style elements
-            for script in soup(["script", "style"]):
-                script.extract()    # rip it out
+            for i, announcement in enumerate(announcements):
+                # Gets message in HTML format
 
-            # get text
-            text = soup.get_text()
+                html = announcement.message
+                text = self.cleanText(html)
+                if announcement._parent_id not in announcements_dict:
+                    announcements_dict[announcement._parent_id] = list()
+                
+                if announcement.read_state == "unread":
+                    announce_counter += 1
+                    announcements_dict[announcement._parent_id].append(text)
+                    announcement.mark_as_read()
+            # returns list
+            return announcements_dict, announce_counter
 
-            # break into lines and remove leading and trailing space on each
-            lines = (line.strip() for line in text.splitlines())
-            # break multi-headlines into a line each
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            # drop blank lines
-            text = '\n'.join(chunk for chunk in chunks if chunk)
+    @tasks.loop(minutes = 10)
+    async def check_announcements(self):
+        for key, canvas in self.canvas_instances.items():
+            if canvas.notifications == True:
+                announce_info = self.announcement(canvas)
+                channel = await self.guild.get_member(int(key)).create_dm()
+                if announce_info[1] > 0:
+                    for key, value in announce_info[0].items():
+                        await channel.send(f"**{canvas.get_course(key).name}**")
+                        for i, text in enumerate(value):
+                            if len(text) > 1500:
+                                await channel.send(f"```{text[0:1000]}...```")
+                            else:
+                                await channel.send(f"```{text}```")
+                else:
+                    pass
+                    #await channel.send("You have no unread announcements.")
 
-            if c._parent_id not in announce:
-                announce[c._parent_id] = list()
-            if c.read_state == "unread":
-                announce_counter += 1
-                announce[c._parent_id].append(text)
-                c.mark_as_read()
+    @commands.command(brief="Pulls latest unread announcements", aliases=["an"])
+    async def announcements(self, ctx):
+        if not (canvas := self.checkCanvasUser(ctx)):
+            return await ctx.send("User's not registered!")
 
-        if announce_counter > 0:
-            for key, value in announce.items():
+        announce_info = self.announcement(canvas)
+        if announce_info[1] > 0:
+            for key, value in announce_info[0].items():
                 await ctx.send(f"**{canvas.get_course(key).name}**")
-                for i, x in enumerate(value):
-                    if len(x) > 1500:
-                        await ctx.send(f"```{x[0:1000]}...```")
+                for i, text in enumerate(value):
+                    if len(text) > 1500:
+                        await ctx.send(f"```{text[0:1000]}...```")
                     else:
-                        await ctx.send(f"```{x}```")
+                        await ctx.send(f"```{text}```")
         else:
             await ctx.send("You have no unread announcements.")
+
+    @commands.command(brief="Toggles Canvas Announcements Discord Notifications", aliases=["togglea", "toggle_a"])
+    async def toggle_anouncements(self, ctx):
+        if not (canvas := self.checkCanvasUser(ctx)):
+            return await ctx.send("User's not registered!")
+        if canvas.notifications == False:
+            canvas.notifications = True
+            return await ctx.send("Turning on Canvas Announcement Notifications")
+        else:
+            canvas.notifications = False
+            return await ctx.send("Turning off Canvas Announcement Notifications")
+
+    @commands.command(brief="Read/unread announcements", aliases = ["toggleran"])
+    async def toggle_all_announcements(self, ctx):
+        if not (canvas := self.checkCanvasUser(ctx)):
+            return await ctx.send("User's not registered!")
+        announcements = self.get_announcements(canvas)
+        all_read = []
+        for i, announcement in enumerate(announcements):
+            all_read.append(announcement.read_state)
+        #There is an unread announcement
+        if any("unread" in read_check for read_check in all_read):
+            for i, announcement in enumerate(announcements):
+                announcement.mark_as_read()
+            return await ctx.send("Read all announcements!")
+        else:
+            for i, announcement in enumerate(announcements):
+                announcement.mark_as_unread()
+            return await ctx.send("Unread all announcements!")
+
+            
+
 
 
         
