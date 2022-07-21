@@ -146,9 +146,9 @@ async def on_message(message):
         #Send a random message from rohit's past
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
     #If they valid then let them use commands (also has to be in bot commands)
-    if message.author in higher_admins or message.author.id == 288884848012296202:
+    if message.author in higher_admins:# or message.author.id == 288884848012296202:
         await bot.process_commands(message)
-    elif message.author in admins and message.channel.id == 975385087677960263:
+    elif message.author in admins:# and message.channel.id == 975385087677960263:
         await bot.process_commands(message)
 
 #Error Handling
@@ -161,6 +161,8 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.MemberNotFound):
         await ctx.send("Member not Found!")
     if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send('Inccorrect arguments entered')
+    if isinstance(error, commands.BadArgument):
         await ctx.send('Inccorrect arguments entered')
 
 

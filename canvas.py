@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from canvasapi import Canvas
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
@@ -16,7 +16,7 @@ class CanvasUser(Canvas):
     def __init__(self, base_url, access_token):
         super().__init__(base_url, access_token)
         #By default turn off announcement notifications
-        self.notifications = False
+        self.notifications = True
         self.due = True
 
 class CanvasCog(commands.Cog):
@@ -77,7 +77,7 @@ class CanvasCog(commands.Cog):
             return await ctx.send("User's not registered!")
 
         user = canvas.get_current_user()
-        await ctx.send("Sending privately...", delete_after=2)
+        #await ctx.send("Sending privately...", delete_after=2)
         enrollments = user.get_enrollments()
         course_ids = []
         channel = await ctx.author.create_dm()
@@ -148,7 +148,7 @@ class CanvasCog(commands.Cog):
     async def check_announcements(self):
         for key, canvas in self.canvas_instances.items():
             if canvas.notifications == True:
-                await self.async_announcement(ctx, canvas, True, key)
+                await self.async_announcement(None, canvas, True, key)
 
 
     async def async_announcement(self, ctx, canvas, looped = False, key = None):
@@ -206,12 +206,14 @@ class CanvasCog(commands.Cog):
 
         
 
-    @commands.command(brief="Toggles Canvas Announcements Discord Notifications", aliases=["tog"])
-    async def toggle(self, ctx, toggleType:str = "all"):
+    @commands.command(brief="Toggles Canvas to Discord Notifications", aliases=["tog"])
+    async def toggle(self, ctx, toggleType:str = None):
         if not (canvas := self.checkCanvasUser(ctx)):
             return await ctx.send("User's not registered!")
-        
-        if toggleType == "all":
+        if toggleType == None:
+            await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
+            await ctx.send(f"Upcoming Assignment Notifications: {canvas.due}")
+        elif toggleType == "all":
             canvas.notifications = not canvas.notifications
             canvas.due = not canvas.due
             await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
@@ -254,6 +256,16 @@ class CanvasCog(commands.Cog):
         time_diff = time_diff.total_seconds()
         return time_diff
 
+    def convert_to_unix_time(self, date: datetime, days: int, hours: int, minutes: int, seconds: int) -> str:
+    # Get the end date
+        end_date = date + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+        # Get a tuple of the date attributes
+        date_tuple = (end_date.year, end_date.month, end_date.day, end_date.hour, end_date.minute, end_date.second)
+
+        # Convert to unix time
+        return f'{int(time.mktime(datetime(*date_tuple).timetuple()))}'
+
     def get_upcoming_assignments_time(self, canvas: CanvasUser, course, days:int, locked:bool = True) -> dict:
         # Gets the current user from canvas
         user = canvas.get_current_user()
@@ -294,7 +306,7 @@ class CanvasCog(commands.Cog):
             channel = await ctx.author.create_dm()
 
         no_assignments = 0
-        await channel.send("Sending privately...", delete_after=2)
+        #await channel.send("Sending privately...", delete_after=2)
 
 
         for key, assignments in upcoming_assignments.items():
@@ -310,24 +322,40 @@ class CanvasCog(commands.Cog):
                 continue
             
 
-            await channel.send(f"**{key}**")
+            #await channel.send(f"**{key}**")
+
             for assignment in assignments:
+                
+                due_date = assignment.due_at_date
+
+                complete_by = str(int(time.mktime(due_date.timetuple())) + 43200)
+
+
                 embed=discord.Embed(
-                title=f"{assignment.name}",
-                url=f"{assignment.html_url}",
-                description=f"This assignment is due at {assignment.due_at_date.strftime('%H:%M:%S, %m/%d/%Y, ')}",
+                title=f"{assignment.name or 'This assignment has no name'}",
+                url=f"{assignment.html_url or 'https://canvas.auckland.ac.nz'}",
+                description=f"**This assignment is due <t:{complete_by}:R> on <t:{complete_by}:F>**\n\nMessages sent about assignment reminders may be delayed or not even be sent at all! *Don't solely rely on this for reminders, this is may be unstable and should serve as a last resort*",
                 color=0xFF5733) 
+                if key:
+                    embed.set_author(
+                    name=f"{key or 'Unknown Course'}",
+                    #icon_url=assignment.profile['avatar_url'],
+                    url=f"{assignment.html_url or 'https://canvas.auckland.ac.nz'}"
+                    )
+                await channel.send(f"\n**There will be an assignment/quiz due soon:** {assignment.name or ''}\n{assignment.html_url}\n*This __won't__ be updated if the assignment due date is changed.*")
+
                 await channel.send(embed=embed)
         if no_assignments == len(upcoming_assignments):
             await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
             
     @commands.command(brief="Gathers upcoming assignments", aliases = ["due"])
-    async def get_upcoming_assignments(self, ctx, course:str = "None", days = 14, locked: str = "False"):
-        try:
-            days = int(course)
-            course = None
-        except ValueError:
-            pass
+    async def get_upcoming_assignments(self, ctx, course = None, days = 14, locked: str = "False"):
+        if days == 14:
+            try:
+                days = int(course)
+                course = None
+            except (ValueError, TypeError):
+                days = 14
         if course is not None:
             course = course.lower()
         if course == "all":
@@ -340,6 +368,7 @@ class CanvasCog(commands.Cog):
             return await ctx.send("Please specify a valid option for the locked parameter")
         if not (canvas := self.checkCanvasUser(ctx)):
             return await ctx.send("User's not registered!")
+        
         await self.async_assignments(ctx, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)
 
         
