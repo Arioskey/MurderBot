@@ -17,6 +17,7 @@ class CanvasUser(Canvas):
         super().__init__(base_url, access_token)
         #By default turn off announcement notifications
         self.notifications = False
+        self.due = True
 
 class CanvasCog(commands.Cog):
     def __init__(self, bot):
@@ -28,6 +29,7 @@ class CanvasCog(commands.Cog):
             "288884848012296202": CanvasUser(API_URL,tokens[1]) #elise
             }
         self.check_announcements.start()
+        self.check_assignments.start()
 
     def checkCanvasUser(self, ctx):
         for key, value in self.canvas_instances.items():
@@ -146,10 +148,10 @@ class CanvasCog(commands.Cog):
     async def check_announcements(self):
         for key, canvas in self.canvas_instances.items():
             if canvas.notifications == True:
-                await self.async_announcement(ctx, canvas, True)
+                await self.async_announcement(ctx, canvas, True, key)
 
 
-    async def async_announcement(self, ctx, canvas, looped = False):
+    async def async_announcement(self, ctx, canvas, looped = False, key = None):
         announce_info = self.announcement(canvas)
         #print(announce_info)
         if looped:
@@ -204,16 +206,24 @@ class CanvasCog(commands.Cog):
 
         
 
-    @commands.command(brief="Toggles Canvas Announcements Discord Notifications", aliases=["togglea", "toggle_a"])
-    async def toggle_anouncements(self, ctx):
+    @commands.command(brief="Toggles Canvas Announcements Discord Notifications", aliases=["tog"])
+    async def toggle(self, ctx, toggleType:str = "all"):
         if not (canvas := self.checkCanvasUser(ctx)):
             return await ctx.send("User's not registered!")
-        if canvas.notifications == False:
-            canvas.notifications = True
-            return await ctx.send("Turning on Canvas Announcement Notifications")
-        else:
-            canvas.notifications = False
-            return await ctx.send("Turning off Canvas Announcement Notifications")
+        
+        if toggleType == "all":
+            canvas.notifications = not canvas.notifications
+            canvas.due = not canvas.due
+            await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
+            await ctx.send(f"Upcoming Assignment Notifications: {canvas.due}")
+            return
+        elif "announce" in toggleType:
+            canvas.notifications = not canvas.notifications
+            return await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
+        elif "assign" in toggleType:
+            canvas.due = not canvas.due
+            return await ctx.send(f"Upcoming Assignment Notifications: {canvas.due}")
+
 
     @commands.command(brief="Read/unread announcements", aliases = ["toggleran"])
     async def toggle_read_all_announcements(self, ctx):
@@ -244,7 +254,7 @@ class CanvasCog(commands.Cog):
         time_diff = time_diff.total_seconds()
         return time_diff
 
-    def get_upcoming_assignments_time(self, canvas: CanvasUser, days:int, locked:bool = True) -> dict:
+    def get_upcoming_assignments_time(self, canvas: CanvasUser, course, days:int, locked:bool = True) -> dict:
         # Gets the current user from canvas
         user = canvas.get_current_user()
         # Gets the favourite courses of user
@@ -271,31 +281,21 @@ class CanvasCog(commands.Cog):
 
         return assignments
 
+    @tasks.loop(minutes = 60)
+    async def check_assignments(self):
+        for key, canvas in self.canvas_instances.items():
+            if canvas.due == True:
+                await self.async_assignments(None, self.get_upcoming_assignments_time(canvas, None, 14, True), key, None, 14, True)
 
-    @commands.command(brief="Gathers upcoming assignments (up to 7 days)", aliases = ["due"])
-    async def get_upcoming_assignments(self, ctx, course:str = "None", days = 7, locked: str = "False"):
-        try:
-            days = int(course)
-            course = None
-        except ValueError:
-            pass
-        if course is not None:
-            course = course.lower()
-        if course == "all":
-            course = None
-        if locked == "True" or locked == "true":
-            locked = True
-        elif locked == "False" or locked == "false":
-            locked = False
+    async def async_assignments(self, ctx, upcoming_assignments, key, course, days, looped = False):
+        if looped:
+            channel = await self.guild.get_member(int(key)).create_dm()
         else:
-            return await ctx.send("Please specify a valid option for the locked parameter")
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
-        upcoming_assignments = self.get_upcoming_assignments_time(canvas, days, locked)
+            channel = await ctx.author.create_dm()
 
         no_assignments = 0
-        await ctx.send("Sending privately...", delete_after=2)
-        channel = await ctx.author.create_dm()
+        await channel.send("Sending privately...", delete_after=2)
+
 
         for key, assignments in upcoming_assignments.items():
             if course != None:
@@ -319,7 +319,30 @@ class CanvasCog(commands.Cog):
                 color=0xFF5733) 
                 await channel.send(embed=embed)
         if no_assignments == len(upcoming_assignments):
-            await ctx.send(f"You have no upcoming assignments! (for at least {days} days)")
+            await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
+            
+    @commands.command(brief="Gathers upcoming assignments", aliases = ["due"])
+    async def get_upcoming_assignments(self, ctx, course:str = "None", days = 14, locked: str = "False"):
+        try:
+            days = int(course)
+            course = None
+        except ValueError:
+            pass
+        if course is not None:
+            course = course.lower()
+        if course == "all":
+            course = None
+        if locked == "True" or locked == "true":
+            locked = True
+        elif locked == "False" or locked == "false":
+            locked = False
+        else:
+            return await ctx.send("Please specify a valid option for the locked parameter")
+        if not (canvas := self.checkCanvasUser(ctx)):
+            return await ctx.send("User's not registered!")
+        await self.async_assignments(ctx, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)
+
+        
         
 
 
