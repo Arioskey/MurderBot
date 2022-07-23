@@ -161,9 +161,10 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.MemberNotFound):
         await ctx.send("Member not Found!")
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send('Inccorrect arguments entered')
+        await ctx.send('Incorrect arguments entered')
     if isinstance(error, commands.BadArgument):
-        await ctx.send('Inccorrect arguments entered')
+        await ctx.send('Incorrect arguments entered')
+    print(error)
 
 
 
@@ -373,11 +374,11 @@ async def list(ctx):
 
 @bot.command(brief="Plays audio from bot")
 async def play(ctx, song:str):
-    vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
+    vc = discord.utils.get(bot.voice_clients, guild = guild)
     if vc is None:
-        current_vc = ctx.author.voice.channel
+        current_vc = discord.utils.get(bot.get_all_members(), id=ctx.author.id).voice.channel
         await current_vc.connect()
-    vc = discord.utils.get(bot.voice_clients, guild = ctx.guild)
+    vc = discord.utils.get(bot.voice_clients, guild = guild)
     if vc.is_paused():
         vc.resume()
     else:
@@ -385,7 +386,7 @@ async def play(ctx, song:str):
 
 @bot.command(brief="Pauses the audio from bot")
 async def pause(ctx):
-    voice = discord.utils.get(bot.voice_clients, guild = ctx.guild)
+    voice = discord.utils.get(bot.voice_clients, guild = guild)
     if voice is None:
         return
     if voice.is_playing():
@@ -395,7 +396,7 @@ async def pause(ctx):
 
 @bot.command(brief="Stops the audio from bot")
 async def stop(ctx):
-    voice = discord.utils.get(bot.voice_clients, guild = ctx.guild)
+    voice = discord.utils.get(bot.voice_clients, guild = guild)
     if voice is None:
         return
     voice.stop()
@@ -445,6 +446,30 @@ async def snipe_clear(ctx):
     snipe_message_author.clear()
     snipe_message_content.clear()
     return await ctx.send("Cleared snipe log")
+
+@bot.command(brief="Deletes a user's messages in a given channel (testing purposes ONLY", aliases=["delete", "del"])
+async def delete_messages(ctx, member:discord.Member, limit:int, channel:discord.TextChannel=None):
+    if channel == None:
+        channel = ctx.channel
+    if ctx.message.author.id != 238063640601821185:
+        return await ctx.send("You do not have access to this command")
+    counter = 0
+    msgs = []
+    extra = 0
+    if ctx.message.author.id == member.id:
+        extra = 1
+    for msg in await channel.history().flatten():
+        if msg.author.id == member.id:
+            msgs.append(msg)
+            counter += 1
+        if counter == limit+extra:
+            break
+    
+    print(len(msgs))
+    await channel.delete_messages(msgs)
+
+    
+    #await message.delete()
 
 #Run's the bot
 try:

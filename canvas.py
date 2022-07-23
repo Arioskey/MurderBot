@@ -28,8 +28,8 @@ class CanvasCog(commands.Cog):
             "238063640601821185": CanvasUser(API_URL,tokens[0]), #aaron
             "288884848012296202": CanvasUser(API_URL,tokens[1]) #elise
             }
-        self.check_announcements.start()
-        self.check_assignments.start()
+        #self.check_announcements.start()
+        #self.check_assignments.start()
 
     def checkCanvasUser(self, ctx):
         for key, value in self.canvas_instances.items():
