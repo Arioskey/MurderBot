@@ -471,13 +471,20 @@ async def delete_messages(ctx, member:discord.Member, limit:int, channel:discord
     
     #await message.delete()
 
+#Changes status of the discord bot
+@bot.command(brief="Changes status of the bot", aliases = ["status", "cs"])
+async def change_status(ctx, newstatus:discord.Status): 
+    #Changes the status of the bot
+    await bot.change_presence(status=newstatus)
+    #Notifies user of status change 
+    await ctx.send(f"Status successfully changed to {newstatus}")
+
 #Run's the bot
 try:
     bot.run(token)
 except:
     import traceback
     traceback.print_exc()
-
 
 
 
