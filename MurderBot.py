@@ -3,6 +3,7 @@ version = "1.9.5"
 #Imports
 from ast import alias
 import asyncio
+from re import T
 
 import discord
 import os
@@ -29,6 +30,7 @@ global permanent_file, alt_file
 permanent_file = "Memory/permanent.txt"
 alt_file = "Memory/alt.txt"
 players = {}
+jumpscareBool = True
 
 #Bot setup
 bot = commands.Bot(command_prefix='.', intents=discord.Intents.all(), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
@@ -66,7 +68,7 @@ def newHigherAdmin(higherAdmin:discord.Member):
 @bot.event
 async def on_ready():
     #Globalise all variables
-    global admins, guild, higher_admins, lists, options, out_of_context, perm_nicknames, phrases, target
+    global admins, guild, higher_admins, lists, options, out_of_context, perm_nicknames, phrases, target, jumpscareBool
     #Initliase variables and lists
     admins = []
     alt_nicknames = []
@@ -76,7 +78,8 @@ async def on_ready():
     lists = [perm_nicknames, alt_nicknames]
     higher_admins = []
 
-    
+ 
+
     #Tell Console we have logged in
     print(f"We have logged in as {bot.user}")
     #Prepare bot
@@ -114,6 +117,8 @@ async def on_ready():
             alt_nicknames.append([user, nick, time])
         fd.close
 
+    global jumpscareTask
+    jumpscareTask = jumpscare.start()
 
     #Check all admins
     checkAdmin()
@@ -216,14 +221,53 @@ coasterUsers = []
 global timedOutMembers
 timedOutMembers = {}
 
+
+@tasks.loop(hours = 1000)
+async def jumpscare():
+    while True:
+        await asyncio.sleep(2)
+        #print(discord.utils.get(bot.voice_clients, guild = guild))
+        #print(jumpscareBool)
+        number=randint(30,600)
+        print(number)
+        await asyncio.sleep(number)
+        if jumpscareBool == True and discord.utils.get(bot.voice_clients, guild = guild) != None:
+                print("boom time")
+                selfPlay("boom")
+
+
+def selfPlay(song):
+   
+    vc = discord.utils.get(bot.voice_clients, guild = guild)
+    if vc.is_paused():
+        vc.resume()
+    else:
+        vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"))
+
+
+
+@bot.command(brief = "Toggle the boom noise", aliases = ["bT"])
+async def boomToggle(ctx):
+    global jumpscareBool
+    jumpscareBool = not jumpscareBool
+
+
+
 @bot.event
 async def on_voice_state_update(member, before, after):
     channel = discord.utils.get(bot.get_all_channels(), name="bot_commands")
     #On join
     if not before.channel and after.channel:
+        #if member.id == 975378100630216704:
+            #jumpscareTask = await jumpscare.start()
         pass
+
+
     #On disconnect
     if before.channel and not after.channel:
+
+            
+
         print(f'{member} has left {before.channel}')
         if member.id in bannedMembers:
             memberPos = bannedMembers.index(member.id)
