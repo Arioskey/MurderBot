@@ -250,6 +250,7 @@ def selfPlay(song):
 async def boomToggle(ctx):
     global jumpscareBool
     jumpscareBool = not jumpscareBool
+    await ctx.send("Jumpscare is now {}".format(jumpscareBool))
 
 
 
