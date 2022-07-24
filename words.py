@@ -30,6 +30,13 @@ def allPhrases():
         "algds",
         "aight",
         "cap",
+        "damage check <@694382869367226368>",
+        "tf... what did i wake up to",
+        "acad?",
+        "Hop on the beat, stop beating your meat... acad?",
+        "funny that's the first thing to come to your mind... Aye <@694382869367226368>",
+        "<@694382869367226368> what are you trying to say?",
+        "Bro SOS for kicking u out, just snapped with what you said",
         ]
 
     out_of_context = [
