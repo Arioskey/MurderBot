@@ -7,8 +7,9 @@ from datetime import datetime, timedelta
 import canvasapi
 from canvasapi import Canvas
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
-from bs4 import BeautifulSoup
+from html2text import HTML2Text
 from typing import Union,TypeVar
+import random
 
 Announcement = canvasapi.discussion_topic.DiscussionTopic
 Assignment = canvasapi.assignment.Assignment
@@ -29,6 +30,10 @@ class CanvasUser(Canvas):
         self.notifications = True
         self.due = True
 
+def RandomColor(): #generates a random discord colour that will be used in the embeds
+  randcolor = discord.Color(random.randint(0x000000, 0xFFFFFF))
+  return randcolor
+
 class CanvasCog(commands.Cog):
     def __init__(self, bot):
         #Get Discord Bot
@@ -42,8 +47,8 @@ class CanvasCog(commands.Cog):
             "288884848012296202": CanvasUser(API_URL,tokens[1]) #elise
             }
         #Start loops to check for announcements and assignments
-        #self.check_announcements.start()
-       # self.check_assignments.start()
+        self.check_announcements.start()
+        #self.check_assignments.start()
 
     #Method to check if user is a discord user
     def checkCanvasUser(self, ctx):
@@ -80,7 +85,96 @@ class CanvasCog(commands.Cog):
         self.canvas_instances.update(temp_dict)
         return await ctx.send("Successfully registered user!")
 
-        
+    def get_modules(self, canvas: CanvasUser):
+        user = canvas.get_current_user()
+        courses = user.get_favorite_courses()
+        modules = {}
+        for course in courses:
+            modules[course.id] = list(course.get_modules())
+        return modules
+    
+    @commands.command(brief="gets modules")
+    async def modules(self, ctx):
+        #Check if the user is verified
+        if not (canvas := self.checkCanvasUser(ctx)):
+            return await ctx.send("User's not registered!")
+        all_modules = self.get_modules(canvas)
+        print(all_modules[72882][1])
+        await ctx.send("Printing modules")
+        for module_id, modules in all_modules:
+            for module in modules:
+                print(module)
+                return
+
+
+    @commands.command(brief="canvas help")
+    async def canvas_help(self, ctx):
+        #First page of embeds **make sure to call each embed a different name**
+        emInfo = discord.Embed(title='Info Commands', color=RandomColor())
+        emInfo.add_field(name='who', value='gets user info')
+        emInfo.add_field(name='ping', value='gets bot speed')
+
+        #Second page of embeds
+        emMod = discord.Embed(title='Mod Commands', color=RandomColor())
+        emMod.add_field(name='kick', value='kicks member')
+        emMod.add_field(name='ban', value='bans member')
+
+        #Group all the embeds to a single phrase to call on later
+        contents = [
+        emInfo,
+        emMod
+        ]
+        #Pages: How many pages you want
+        #Cur_page: Tells you what your current page is. **1 = when command is called it starts on 1**
+        #message: sends the above and embeds in a message **Make sure embed=contents** 
+        pages = 2
+        cur_page = 1
+        message = await ctx.send(
+        content=f"Page {cur_page}/{pages}\n**Only caller can change page**",
+        embed=contents[cur_page - 1]
+        )
+
+
+        #Tells bot to add the following reaction emojis to above message just sent
+        await message.add_reaction("◀️")
+        await message.add_reaction("▶️")
+
+        #Check function so only the command caller can interact with the embed
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️"]
+
+
+        while True:
+            try:
+            #**timeout=None** No time limit if no reaction
+            #**timeout=60** If no reaction after 60 seconds message will delete 
+                reaction, user = await self.bot.wait_for("reaction_add", timeout=None, check=check)
+
+
+                if str(reaction.emoji) == "▶️" and cur_page != pages:
+                    cur_page += 1
+                    await message.edit(
+                       content=f"Page {cur_page}/{pages}\n**Only caller can change page**",
+                       embed=contents[cur_page - 1]
+                 )
+                    await message.remove_reaction(reaction, user)
+
+                elif str(reaction.emoji) == "◀️" and cur_page > 1:
+                    cur_page -= 1
+                    await message.edit(
+                    content=f"Page {cur_page}/{pages}\n**Only caller can change page**",
+                    embed=contents[cur_page - 1]
+                    )
+                    await message.remove_reaction(reaction, user)
+
+                else:
+                    await message.remove_reaction(reaction, user)
+
+            except asyncio.TimeoutError:
+                await message.delete()
+                break        
+
+
     @commands.command(brief="Returns person's grades")
     async def grades(self, ctx):
         #Check if the user is verified
@@ -109,22 +203,9 @@ class CanvasCog(commands.Cog):
 
     #Function clean up HTML texts
     def cleanText(self, text):
-        soup = BeautifulSoup(text, features="html.parser")
-
-        # kill all script and style elements
-        for script in soup(["script", "style"]):
-            script.extract()    # rip it out
-
-        # get text
-        text = soup.get_text()
-
-        # break into lines and remove leading and trailing space on each
-        lines = (line.strip() for line in text.splitlines())
-        # break multi-headlines into a line each
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        # drop blank lines
-        text = '\n'.join(chunk for chunk in chunks if chunk)
-        
+        h = HTML2Text()
+        h.ignore_links = False
+        text = h.handle(text)
         return text
 
     def get_announcements(self, canvas: CanvasUser) -> list[Announcement]:
@@ -198,7 +279,7 @@ class CanvasCog(commands.Cog):
                     embed=discord.Embed(
                     title=f"{announcement.title or 'This announcement has no title'}",
                     url=f"{announcement.html_url or 'https://canvas.auckland.ac.nz'}",
-                    description=f"{text[0:500]}",
+                    description=f"{text}",
                     color=0xFF5733) 
 
                     # Checks if we can see the an author
@@ -397,7 +478,8 @@ class CanvasCog(commands.Cog):
                 await channel.send(embed=embed)
         # Check if we have no announcements
         if no_assignments == len(upcoming_assignments):
-            await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
+            if not looped:
+                await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
             
     @commands.command(brief="Gathers upcoming assignments", aliases = ["due"])
     async def get_upcoming_assignments(self, ctx, course: Union[str, int] = None, days: int = GLOBAL_DAYS, locked: str = "False"):

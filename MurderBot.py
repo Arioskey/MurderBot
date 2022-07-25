@@ -9,6 +9,7 @@ import discord
 import os
 import datetime
 import time
+import traceback
 
 from discord import FFmpegPCMAudio
 from argparse import ArgumentError
@@ -21,6 +22,8 @@ from random import randint
 from words import allPhrases
 from banned import Banned
 from canvas import CanvasCog
+
+
 
 # Variables
 token = open(".git/token.txt","r").read()
@@ -169,7 +172,9 @@ async def on_command_error(ctx, error):
         await ctx.send('Incorrect arguments entered')
     if isinstance(error, commands.BadArgument):
         await ctx.send('Incorrect arguments entered')
-    print(error)
+    print('Ignoring exception in command {}:'.format(ctx.command))
+    traceback.print_exception(type(error), error, error.__traceback__)        
+
 
 
 
@@ -222,22 +227,21 @@ global timedOutMembers
 timedOutMembers = {}
 
 
-@tasks.loop(hours = 1000)
+@tasks.loop()
 async def jumpscare():
     while True:
         await asyncio.sleep(2)
         #print(discord.utils.get(bot.voice_clients, guild = guild))
         #print(jumpscareBool)
         number=randint(30,600)
-        print(number)
+        #print(number)
         await asyncio.sleep(number)
         if jumpscareBool == True and discord.utils.get(bot.voice_clients, guild = guild) != None:
-                print("boom time")
+                #print("boom time")
                 selfPlay("boom")
 
 
 def selfPlay(song):
-   
     vc = discord.utils.get(bot.voice_clients, guild = guild)
     if vc.is_paused():
         vc.resume()
@@ -324,7 +328,8 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
     #Check if no target
     if member == None:
         member = ctx.author
-
+    if member.id == 238063640601821185:
+        member = ctx.author
     if ctx.author.id == 694382869367226368:
         #if member.id == 288884848012296202:
         member = ctx.author
@@ -525,11 +530,9 @@ async def change_status(ctx, newstatus:discord.Status):
     await ctx.send(f"Status successfully changed to {newstatus}")
 
 #Run's the bot
-try:
-    bot.run(token)
-except:
-    import traceback
-    traceback.print_exc()
+
+bot.run(token)
+
 
 
 
