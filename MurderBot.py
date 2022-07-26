@@ -1,9 +1,7 @@
-version = "1.9.5"
-# come find me hehe
+version = "2.0"
 #Imports
-from ast import alias
+
 import asyncio
-from re import T
 
 import discord
 import os
@@ -11,10 +9,11 @@ import datetime
 import time
 import traceback
 
-from discord import FFmpegPCMAudio
+from discord import FFmpegPCMAudio, app_commands
 from argparse import ArgumentError
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
+from discord.ui import Button, View
 from nick import Nick
 from voice import Voice
 from software import Software
@@ -22,7 +21,7 @@ from random import randint
 from words import allPhrases
 from banned import Banned
 from canvas import CanvasCog
-
+from typing import Optional, Union
 
 
 # Variables
@@ -36,50 +35,21 @@ players = {}
 jumpscareBool = True
 
 #Bot setup
-bot = commands.Bot(command_prefix='.', intents=discord.Intents.all(), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
+bot = commands.Bot(command_prefix='.', test_guilds= [852379093776465940], intents=discord.Intents.all(), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
 
-
-#Check Admin Method
-def checkAdmin():
-    #Clears the admins list
-    admins.clear()
-    #Gets the valid admin roles
-    adminRole = discord.utils.get(guild.roles, name="Murderer")
-    adminRole2 = discord.utils.get(guild.roles, name="dn")
-    #Checks which members in the server are admins
-    for member in guild.members:
-        #If they are admin make them an admin of the bot
-        if adminRole in member.roles or adminRole2 in member.roles:
-            newAdmin(member)
-        if adminRole2 in member.roles:
-            newHigherAdmin(member)
-        if member.id == 309198720606404609:
-            newHigherAdmin(member)
-
-#Make Admin Method
-def newAdmin(admin:discord.Member):
-    #Adds admin to admins list
-    admins.append(admin)
-
-#Make HigherAdmin Method
-def newHigherAdmin(higherAdmin:discord.Member):
-    #Adds admin to admins list
-    higher_admins.append(higherAdmin)
 
 
 #On bot start up
 @bot.event
 async def on_ready():
     #Globalise all variables
-    global admins, guild, higher_admins, lists, options, out_of_context, perm_nicknames, phrases, target, jumpscareBool
+    global  guild,  lists, options, out_of_context, perm_nicknames, phrases, target, jumpscareBool
     #Initliase variables and lists
-    admins = []
     alt_nicknames = []
     phrases = options[0]
     out_of_context = options[1] 
     perm_nicknames = []
     lists = [perm_nicknames, alt_nicknames]
-    higher_admins = []
 
  
 
@@ -87,6 +57,13 @@ async def on_ready():
     print(f"We have logged in as {bot.user}")
     #Prepare bot
     await bot.wait_until_ready()
+    #bot.add_cog(Nick(bot, lists))
+    await bot.add_cog(Voice(bot))
+    #bot.add_cog(Software(bot))
+    await bot.add_cog(CanvasCog(bot))
+
+
+
     
     #Get current server
     guild = bot.guilds[0]
@@ -123,19 +100,16 @@ async def on_ready():
     global jumpscareTask
     jumpscareTask = jumpscare.start()
 
-    #Check all admins
-    checkAdmin()
     #Initialise nick commands class
-    bot.add_cog(Nick(bot, lists))
-    bot.add_cog(Voice(bot, higher_admins))
-    bot.add_cog(Software(bot))
-    bot.add_cog(CanvasCog(bot))
+
     if len(alt_nicknames) != 0:
         nick_cog = bot.get_cog("Nick")
         await nick_cog.set_alt_nick_on_ready()
     
-    
 
+@bot.command()
+async def sync(ctx):
+    await bot.tree.sync()
     
     
 
@@ -153,11 +127,7 @@ async def on_message(message):
         randoms = [random1, random2]
         #Send a random message from rohit's past
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
-    #If they valid then let them use commands (also has to be in bot commands)
-    if message.author in higher_admins:# or message.author.id == 288884848012296202:
-        await bot.process_commands(message)
-    elif message.author in admins:# and message.channel.id == 975385087677960263:
-        await bot.process_commands(message)
+    await bot.process_commands(message)
 
 #Error Handling
 @bot.event
@@ -179,30 +149,32 @@ async def on_command_error(ctx, error):
 
 
 #Send method (Move to another class)
-@bot.command(brief="Send a message via the bot to a channel")
-async def send(ctx, channel:discord.TextChannel, *, message):
-    await ctx.message.delete()
+@bot.tree.command(name = "send", description="Send a message via the bot to a channel")
+async def send(interaction: discord.Interaction, channel:discord.TextChannel, *, message:str):
     #Send's message to given channel
     await channel.send(message)
+    return await interaction.response.send_message("Sent message!")
+
 
 #Ping pong
-@bot.command(brief="Pong")
-async def ping(ctx, member:discord.Member=None, channel:discord.TextChannel=None):
+@bot.tree.command(name = "ping", description="Pong")
+async def ping(interaction: discord.Interaction, member:discord.Member=None, channel:discord.TextChannel=None):
     #Ping's author
     if member == None:
-        member = ctx.message.author
+        member = interaction.user
     #Ping's user in current channel
     if channel == None:
-        channel = ctx.channel
+        channel = interaction.channel
     #channel = discord.utils.get(bot.get_all_channels(), name="sounds")
     if member.status != discord.Status.offline:
         await channel.send(f"Hi <@{member.id}>!!")
     else:
         await channel.send(f"Where is <@{member.id}>?")
+    await interaction.response.send_message("Pinged!")
 
 
-@bot.command(brief="Moves everyone away from target")
-async def move_all_away(ctx, member:discord.Member=None):
+@bot.tree.command(description="Moves everyone away from target")
+async def move_all_away(interaction: discord.Interaction, member:discord.Member=None):
     #Check if no target
     if member == None:
         member = guild.get_member(target) #target
@@ -219,7 +191,7 @@ async def move_all_away(ctx, member:discord.Member=None):
                 while value == i:
                     value = randint(0, 2)
                 await user.move_to(guild.voice_channels[value])
-            return
+            return await interaction.response.send_message("Moved all away", ephemeral=True)
 
 global coasterUsers
 coasterUsers = []
@@ -250,11 +222,11 @@ def selfPlay(song):
 
 
 
-@bot.command(brief = "Toggle the boom noise", aliases = ["bT"])
-async def boomToggle(ctx):
+@bot.tree.command(description = "Toggle the boom noise")
+async def boom_toggle(interaction: discord.Interaction):
     global jumpscareBool
     jumpscareBool = not jumpscareBool
-    await ctx.send("Jumpscare is now {}".format(jumpscareBool))
+    await interaction.response.send_message(f"Jumpscare is now **{jumpscareBool}**")
 
 
 
@@ -270,9 +242,6 @@ async def on_voice_state_update(member, before, after):
 
     #On disconnect
     if before.channel and not after.channel:
-
-            
-
         print(f'{member} has left {before.channel}')
         if member.id in bannedMembers:
             memberPos = bannedMembers.index(member.id)
@@ -323,32 +292,30 @@ async def on_voice_state_update(member, before, after):
 
 
  
-@bot.command(brief="Rollercoasts a user", aliases = ["rc"])
-async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
+@bot.tree.command(description="Rollercoasts a user")
+async def rollercoaster(interaction:discord.Interaction, member:discord.Member=None, movetimes:int = 1):
     #Check if no target
     if member == None:
-        member = ctx.author
+        member = interaction.user
     if member.id == 238063640601821185:
-        member = ctx.author
-    if ctx.author.id == 694382869367226368:
+        member = interaction.user
+    if interaction.user.id == 694382869367226368:
         #if member.id == 288884848012296202:
-        member = ctx.author
+        member = interaction.user
     initial_channel = member.voice.channel
 
     if member.voice is None:
-        return await ctx.send("User is not in a channel")
+        return await interaction.response.send_message("User is not in a channel")
     
     if movetimes < 1:
-        return await ctx.send("Please move at least 1 time")
+        return await interaction.response.send_message("Please move at least 1 time")
 
-    if movetimes > 15 and ctx.author not in higher_admins:
-        return await ctx.send("You can only move up to 15 times!")
 
     coasterUsers.append(member.id)
     #name = member.display_name
     value = randint(0,2)
-    await ctx.send(f"Coasting {movetimes} times")
-    await ctx.send(f"Enjoy the ride <@{member.id}>!!!")
+    await interaction.response.send_message(f"Enjoy the ride <@{member.id}>!!!")
+    await interaction.channel.send(f"Coasting {movetimes} times",)
     #print(movetimes)
     for i in range(movetimes):
         print(i+1)
@@ -362,20 +329,21 @@ async def rollercoaster(ctx, member:discord.Member=None, movetimes:int = 1):
         await member.move_to(initial_channel)
     if member.id in coasterUsers:
         coasterUsers.remove(member.id)
+    
 
 global bannedMembers
 bannedMembers = []
 global bans
 bans = []
 
-@bot.command(brief = "Keep someone out of a voice channel")
-async def ban(ctx, member:discord.Member=None, bantime:int=10, channel:discord.VoiceChannel=None):
+@bot.tree.command(description = "Keep someone out of a voice channel")
+async def ban(interaction:discord.Interaction, member:discord.Member=None, bantime:int=10, channel:discord.VoiceChannel=None):
     if member.id in bannedMembers:
-        return await ctx.send(f"{member} is already banned LOL")
+        return await interaction.response.send_message(f"{member} is already banned LOL")
     if member == None:
         member = guild.get_member(694382869367226368)
     if channel == None:
-        channel = ctx.author.voice.channel
+        channel = interaction.user.voice.channel
     if member.voice.channel == channel:
         await member.move_to(None, reason="Timed out")
     newBan = Banned(bot, member, channel, bantime)
@@ -383,83 +351,76 @@ async def ban(ctx, member:discord.Member=None, bantime:int=10, channel:discord.V
     bans.append(newBan)
 
 
-
-
-
-
-#Checks for admins            
-@bot.command(brief="Checks the current admins")
-async def check_admins(ctx):
-    await ctx.send("Checking admins...")
-    checkAdmin()
-    if len(admins) != 0:
-        #List all admins
-        await ctx.send("Found admins:")
-        for i, person in enumerate(admins):
-            await ctx.send(f"{person.name}")
-        #Announce finished
-        await ctx.send("Finished")
-    else:
-        #List is empty
-        await ctx.send("No admins found!")
     
 #Send a private dm to a person
-@bot.command(brief="Send's an annonymous dm to a user")
-async def send_dm(ctx, user:discord.Member, *, message: str):
+@bot.tree.command(description="Send's an annonymous dm to a user")
+async def send_dm(interaction: discord.Interaction, user:discord.Member, *, message: str):
     #Hide your message
-    await ctx.message.delete()
     #Creates a private dm
     channel = await user.create_dm()
     #Send's dm to user
     await channel.send(message)
+    return await interaction.response.send_message("Sent message!", ephemeral=True)
 
-@bot.command(brief="Lists playable sounds")
-async def list(ctx):
-    sounds = []
+def get_songs():
+    songs = []
     sound_list = os.listdir("Songs")
     for i, x in enumerate(sound_list):
         x = x.replace(".mp3", "")
-        sounds.append(x)
-    await ctx.send(sounds)
+        songs.append(x)
+    return songs
 
-@bot.command(brief="Plays audio from bot")
-async def play(ctx, song:str):
+
+@bot.tree.command(description="Lists playable sounds")
+async def songs(interaction:discord.Interaction):
+    return await interaction.response.send_message(f"{get_songs()}", ephemeral=True)
+
+@bot.tree.command(description="Plays audio from bot")
+async def play(interaction:discord.Interaction, song:str = None):
+    if song is not None:
+        song = song.lower()
+    if song not in get_songs() and song is not None:
+        return await interaction.response.send_message(f"Not a valid song!\n Choose from\n {get_songs()}")
     vc = discord.utils.get(bot.voice_clients, guild = guild)
     if vc is None:
-        current_vc = discord.utils.get(bot.get_all_members(), id=ctx.author.id).voice.channel
+        print(dir(interaction.user.voice))
+        current_vc = interaction.user.voice.channel
         await current_vc.connect()
     vc = discord.utils.get(bot.voice_clients, guild = guild)
     if vc.is_paused():
         vc.resume()
+        return await interaction.response.send_message("Resuming")
+    elif song is None:
+        return await interaction.response.send_message(f"Not a valid song!\n Choose from\n {get_songs()}")
     else:
         vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"))
+    return await interaction.response.send_message(f"Playing {song}")
 
-@bot.command(brief="Pauses the audio from bot")
-async def pause(ctx):
+@bot.tree.command(description="Pauses the audio from bot")
+async def pause(interaction:discord.Interaction):
     voice = discord.utils.get(bot.voice_clients, guild = guild)
     if voice is None:
-        return
+        return await interaction.response.send_message("Murder Bot is not connected")
     if voice.is_playing():
         voice.pause()
+        return await interaction.response.send_message("Paused audio")
     else:
-        await ctx.send("Currently no audio is playing")
+        return await interaction.response.send_message("Currently no audio is playing")
 
-@bot.command(brief="Stops the audio from bot")
-async def stop(ctx):
+@bot.tree.command(description="Stops the audio from bot")
+async def stop(interaction:discord.Interaction):
     voice = discord.utils.get(bot.voice_clients, guild = guild)
     if voice is None:
-        return
+        return await interaction.response.send_message("Murder Bot is not connected")
     voice.stop()
 
-    await ctx.send("Stopped audio")
+    return await interaction.response.send_message("Stopped audio")
 
 snipe_message_author = {}
 snipe_message_content = {}
 
 @bot.event
 async def on_message_delete(message):
-    if message.content.startswith("."):
-        return
     print(f"A message was deleted in channel {message.channel}")
     print(f"{message.author} said:\n{message.content}")
     if message.author.id == 975378100630216704:
@@ -477,36 +438,34 @@ async def on_message_delete(message):
         # del snipe_message_content[message.channel.id]
 
 
-@bot.command(brief="Snipes the last deleted message")
-async def snipe(ctx, channel:discord.TextChannel=None):
+@bot.tree.command(description="Snipes the last deleted message")
+async def snipe(interaction:discord.Interaction, channel:discord.TextChannel=None):
     if channel == None:
-        channel = ctx.channel
+        channel = interaction.channel
     try: #This piece of code is run if the bot finds anything in the dictionary
         for index, value in enumerate(snipe_message_content[channel.id]):
-            em = discord.Embed(name = f"Deleted message in #{channel.name}", description = value)
+            em = discord.Embed(title = f"Deleted message in #{channel.name}", description = value)
             em.set_footer(text = f"This message was sent by {snipe_message_author[channel.id][index].name}")
-            await ctx.send(embed = em)
+            return await interaction.response.send_message(embed = em)
     except KeyError: #This piece of code is run if the bot doesn't find anything in the dictionary
-        await ctx.send(f"There are no recently deleted messages in #{channel.name}")
+        await interaction.response.send_message(f"There are no recently deleted messages in #{channel.name}")
 
-@bot.command(brief="Clears the snipe log", aliases=["snipeclear","snipec", "sc"])
-async def snipe_clear(ctx):
-    if ctx.message.author not in higher_admins:
-        return await ctx.send("You do not have permission to clear snipe log")
+@bot.tree.command(description="Clears the snipe log")
+async def snipe_clear(interaction:discord.Interaction):
     snipe_message_author.clear()
     snipe_message_content.clear()
-    return await ctx.send("Cleared snipe log")
+    return await interaction.response.send_message("Cleared snipe log")
 
-@bot.command(brief="Deletes a user's messages in a given channel (testing purposes ONLY", aliases=["delete", "del"])
-async def delete_messages(ctx, member:discord.Member, limit:int, channel:discord.TextChannel=None):
+@bot.tree.command(description="Deletes a user's messages in a given channel (testing purposes ONLY)")
+async def delete_messages(interaction:discord.Interaction, member:discord.Member, limit:int, channel:discord.TextChannel=None):
     if channel == None:
-        channel = ctx.channel
-    if ctx.message.author.id != 238063640601821185:
-        return await ctx.send("You do not have access to this command")
+        channel = interaction.channel
+    if interaction.message.author.id != 238063640601821185:
+        return await interaction.response.send_message("You do not have access to this command")
     counter = 0
     msgs = []
     extra = 0
-    if ctx.message.author.id == member.id:
+    if interaction.message.author.id == member.id:
         extra = 1
     for msg in await channel.history().flatten():
         if msg.author.id == member.id:
@@ -514,20 +473,19 @@ async def delete_messages(ctx, member:discord.Member, limit:int, channel:discord
             counter += 1
         if counter == limit+extra:
             break
-    
-    print(len(msgs))
     await channel.delete_messages(msgs)
+    return await interaction.response.send_message("Deleted messages")
 
     
     #await message.delete()
 
 #Changes status of the discord bot
-@bot.command(brief="Changes status of the bot", aliases = ["status", "cs"])
-async def change_status(ctx, newstatus:discord.Status): 
+@bot.tree.command(description="Changes status of the bot")
+async def change_status(interaction:discord.Interaction, newstatus:discord.Status): 
     #Changes the status of the bot
     await bot.change_presence(status=newstatus)
     #Notifies user of status change 
-    await ctx.send(f"Status successfully changed to {newstatus}")
+    await interaction.response.send_message(f"Status successfully changed to {newstatus}")
 
 #Run's the bot
 

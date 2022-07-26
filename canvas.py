@@ -1,5 +1,6 @@
 import discord
 from discord import TextChannel, DMChannel, VoiceChannel, Member
+from discord import app_commands
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from datetime import datetime, timedelta
@@ -52,25 +53,24 @@ class CanvasCog(commands.Cog):
         #Start loops to check for announcements and assignments
         self.check_announcements.start()
         #self.check_assignments.start()
-
+    
     #Method to check if user is a discord user
     def checkCanvasUser(self, ctx):
         #Loop through current canvas instances
         for key, value in self.canvas_instances.items():
             #Check if the ctx user is in the dict
-            if key == str(ctx.author.id):
+            if key == str(interaction.author.id):
                 #Return the canvas Obj
                 return value
         return False
     
-    @commands.command(brief="Register user temporarily")
-    async def login(self, ctx, token:str):
+
+    @app_commands.command(description="Login to canvas")
+    async def login(self, interaction:discord.Interaction, token:str):
         #If logging in a public channel remove the login message
-        if not isinstance(ctx.channel, discord.channel.DMChannel):
-            await ctx.message.delete()
         #Check if user is already registered
-        if isinstance(self.checkCanvasUser(ctx), CanvasUser):
-            return await ctx.send("User already registered")
+        if isinstance(self.checkCanvasUser(interaction), CanvasUser):
+            return await interaction.respond("User already registered", ephemeral=True)
         #Create a new CanvasUSer instance for the user
         newUser = CanvasUser(API_URL, token)
         
@@ -79,14 +79,14 @@ class CanvasCog(commands.Cog):
             newUser.get_course(1)
 
         except InvalidAccessToken:
-            return await ctx.send("Invalid Access Token!")
+            return await interaction.respond("Invalid Access Token!", ephemeral=True)
 
         except (ResourceDoesNotExist, Forbidden):
             pass
         # Add user into the dictionary
-        temp_dict = {str(ctx.author.id):newUser}
+        temp_dict = {str(interaction.author.id):newUser}
         self.canvas_instances.update(temp_dict)
-        return await ctx.send("Successfully registered user!")
+        return await interaction.respond("Successfully registered user!", ephemeral=True)
 
     def get_modules(self, canvas: CanvasUser):
         user = canvas.get_current_user()
@@ -99,18 +99,18 @@ class CanvasCog(commands.Cog):
     def downloadFile(self, file):
         pass
 
-    @commands.command(brief="gets modules")
-    async def modules(self, ctx, check_course:str=None):
+    @app_commands.command(description="gets downloadable modules")
+    async def modules(self, interaction:discord.Interaction, check_course:str=None):
 
         def check(reaction, user):
-            return user == ctx.author and str(reaction.emoji) in ["⬇️"]
+            return user == interaction.author and str(reaction.emoji) in ["⬇️"]
 
         #Check if the user is verified
         if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
+            return await interaction.respond("User's not registered!")
         all_modules = self.get_modules(canvas)
         
-        await ctx.send("Printing modules")
+        await interaction.respond("Printing modules...")
         messages = {}
         for module_id, course_modules in all_modules.items():
             print()
@@ -120,16 +120,15 @@ class CanvasCog(commands.Cog):
                 check_course = check_course.upper()
                 #Formatting issues
                 course_name = course.name.replace(" ", "")
-                print(check_course)
-                print(course_name)
+
                 if check_course not in course_name:
                     continue
-            await ctx.send(f"Modules for {course.name}")
+            await interaction.channel.send(f"Modules for {course.name}")
             for module in course_modules:
                 for module_item in module.get_module_items():
                     if module_item.type != "File":
                         continue
-                    message = await ctx.send(module_item.title)
+                    message = await interaction.channel.send(module_item.title)
                     await message.add_reaction("⬇️")
                     messages[message] = module_item
                     
@@ -142,11 +141,10 @@ class CanvasCog(commands.Cog):
                     module_item = messages.get(message)
                     if str(reaction.emoji) == "⬇️":
                         await message.remove_reaction(reaction, user)
-                        await ctx.send(f"Downloading {file.filename}")
+                        await interaction.channel.send(f"Downloading {file.filename}")
                         course = canvas.get_course(module_item.course_id)
                         file = course.get_file(module_item.content_id)
-                        # print(file.filename)
-                        # print(dir(file))
+
                         file.download(f"{str(Path.home())}\\Downloads\\{file.filename}")
 
                     else:
@@ -158,7 +156,7 @@ class CanvasCog(commands.Cog):
                 return
                 
 
-    @commands.command(brief="Returns person's grades")
+    @commands.command(description="Returns person's grades")
     async def grades(self, ctx):
         #Check if the user is verified
         if not (canvas := self.checkCanvasUser(ctx)):
