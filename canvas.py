@@ -5,10 +5,13 @@ from discord.ext.commands import Bot
 from datetime import datetime, timedelta
 
 import canvasapi
+import os
 from canvasapi import Canvas
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from html2text import HTML2Text
 from typing import Union,TypeVar
+from pathlib import Path
+
 import random
 
 Announcement = canvasapi.discussion_topic.DiscussionTopic
@@ -93,87 +96,67 @@ class CanvasCog(commands.Cog):
             modules[course.id] = list(course.get_modules())
         return modules
     
+    def downloadFile(self, file):
+        pass
+
     @commands.command(brief="gets modules")
-    async def modules(self, ctx):
+    async def modules(self, ctx, check_course:str=None):
+
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ["⬇️"]
+
         #Check if the user is verified
         if not (canvas := self.checkCanvasUser(ctx)):
             return await ctx.send("User's not registered!")
         all_modules = self.get_modules(canvas)
-        print(all_modules[72882][1])
+        
         await ctx.send("Printing modules")
-        for module_id, modules in all_modules:
-            for module in modules:
-                print(module)
-                return
-
-
-    @commands.command(brief="canvas help")
-    async def canvas_help(self, ctx):
-        #First page of embeds **make sure to call each embed a different name**
-        emInfo = discord.Embed(title='Info Commands', color=RandomColor())
-        emInfo.add_field(name='who', value='gets user info')
-        emInfo.add_field(name='ping', value='gets bot speed')
-
-        #Second page of embeds
-        emMod = discord.Embed(title='Mod Commands', color=RandomColor())
-        emMod.add_field(name='kick', value='kicks member')
-        emMod.add_field(name='ban', value='bans member')
-
-        #Group all the embeds to a single phrase to call on later
-        contents = [
-        emInfo,
-        emMod
-        ]
-        #Pages: How many pages you want
-        #Cur_page: Tells you what your current page is. **1 = when command is called it starts on 1**
-        #message: sends the above and embeds in a message **Make sure embed=contents** 
-        pages = 2
-        cur_page = 1
-        message = await ctx.send(
-        content=f"Page {cur_page}/{pages}\n**Only caller can change page**",
-        embed=contents[cur_page - 1]
-        )
-
-
-        #Tells bot to add the following reaction emojis to above message just sent
-        await message.add_reaction("◀️")
-        await message.add_reaction("▶️")
-
-        #Check function so only the command caller can interact with the embed
-        def check(reaction, user):
-            return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️"]
-
-
+        messages = {}
+        for module_id, course_modules in all_modules.items():
+            print()
+            course = canvas.get_course(module_id)
+            print(course.name)
+            if check_course != None:
+                check_course = check_course.upper()
+                #Formatting issues
+                course_name = course.name.replace(" ", "")
+                print(check_course)
+                print(course_name)
+                if check_course not in course_name:
+                    continue
+            await ctx.send(f"Modules for {course.name}")
+            for module in course_modules:
+                for module_item in module.get_module_items():
+                    if module_item.type != "File":
+                        continue
+                    message = await ctx.send(module_item.title)
+                    await message.add_reaction("⬇️")
+                    messages[message] = module_item
+                    
+                
         while True:
             try:
-            #**timeout=None** No time limit if no reaction
-            #**timeout=60** If no reaction after 60 seconds message will delete 
-                reaction, user = await self.bot.wait_for("reaction_add", timeout=None, check=check)
+                reaction, user = await self.bot.wait_for("reaction_add", timeout=15, check=check)
+                if reaction.message in messages.keys():
+                    message = reaction.message
+                    module_item = messages.get(message)
+                    if str(reaction.emoji) == "⬇️":
+                        await message.remove_reaction(reaction, user)
+                        await ctx.send(f"Downloading {file.filename}")
+                        course = canvas.get_course(module_item.course_id)
+                        file = course.get_file(module_item.content_id)
+                        # print(file.filename)
+                        # print(dir(file))
+                        file.download(f"{str(Path.home())}\\Downloads\\{file.filename}")
 
-
-                if str(reaction.emoji) == "▶️" and cur_page != pages:
-                    cur_page += 1
-                    await message.edit(
-                       content=f"Page {cur_page}/{pages}\n**Only caller can change page**",
-                       embed=contents[cur_page - 1]
-                 )
-                    await message.remove_reaction(reaction, user)
-
-                elif str(reaction.emoji) == "◀️" and cur_page > 1:
-                    cur_page -= 1
-                    await message.edit(
-                    content=f"Page {cur_page}/{pages}\n**Only caller can change page**",
-                    embed=contents[cur_page - 1]
-                    )
-                    await message.remove_reaction(reaction, user)
-
-                else:
-                    await message.remove_reaction(reaction, user)
+                    else:
+                        await reaction.message.remove_reaction(reaction, user)
 
             except asyncio.TimeoutError:
-                await message.delete()
-                break        
-
+                for message, module_item in messages.items():
+                    await message.delete()
+                return
+                
 
     @commands.command(brief="Returns person's grades")
     async def grades(self, ctx):
