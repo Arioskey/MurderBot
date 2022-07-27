@@ -10,7 +10,6 @@ import os
 from canvasapi import Canvas
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from html2text import HTML2Text
-from typing import Union,TypeVar
 from pathlib import Path
 
 import random
@@ -33,6 +32,24 @@ class CanvasUser(Canvas):
         #By default turn off announcement notifications
         self.notifications = True
         self.due = True
+        self.get_grades()
+
+
+    def get_grades(self):
+        course_ids = []
+        user = super().get_current_user()        
+        enrollments = user.get_enrollments()
+        #await interaction.channel.send("Loading...", ephemeral=True)
+        self.grades_string = ""
+        #Loop through their enrollmenets
+        for i, course in enumerate(enrollments):
+            #Skip repeated enrollments (bug)
+            if course.course_id in course_ids:
+                continue
+            #Add the course id to the list
+            course_ids.append(course.course_id)
+            #Add the grades to the grade string
+            self.grades_string = f"{self.grades_string}+ {super().get_course(course.course_id).name}: {course.grades.get('final_grade')} \n"
 
 def RandomColor(): #generates a random discord colour that will be used in the embeds
   randcolor = discord.Color(random.randint(0x000000, 0xFFFFFF))
@@ -55,11 +72,11 @@ class CanvasCog(commands.Cog):
         #self.check_assignments.start()
     
     #Method to check if user is a discord user
-    def checkCanvasUser(self, ctx):
+    def checkCanvasUser(self, interaction:discord.Interaction):
         #Loop through current canvas instances
         for key, value in self.canvas_instances.items():
-            #Check if the ctx user is in the dict
-            if key == str(interaction.author.id):
+            #Check if the interaction user is in the dict
+            if key == str(interaction.user.id):
                 #Return the canvas Obj
                 return value
         return False
@@ -70,7 +87,7 @@ class CanvasCog(commands.Cog):
         #If logging in a public channel remove the login message
         #Check if user is already registered
         if isinstance(self.checkCanvasUser(interaction), CanvasUser):
-            return await interaction.respond("User already registered", ephemeral=True)
+            return await interaction.response.send_message("User already registered", ephemeral=True)
         #Create a new CanvasUSer instance for the user
         newUser = CanvasUser(API_URL, token)
         
@@ -79,14 +96,15 @@ class CanvasCog(commands.Cog):
             newUser.get_course(1)
 
         except InvalidAccessToken:
-            return await interaction.respond("Invalid Access Token!", ephemeral=True)
+
+            return await interaction.response.send_message("Invalid Access Token!", ephemeral=True)
 
         except (ResourceDoesNotExist, Forbidden):
-            pass
+            await interaction.response.send_message("Successfully registered user!", ephemeral=True)
         # Add user into the dictionary
         temp_dict = {str(interaction.author.id):newUser}
         self.canvas_instances.update(temp_dict)
-        return await interaction.respond("Successfully registered user!", ephemeral=True)
+        
 
     def get_modules(self, canvas: CanvasUser):
         user = canvas.get_current_user()
@@ -106,11 +124,11 @@ class CanvasCog(commands.Cog):
             return user == interaction.author and str(reaction.emoji) in ["⬇️"]
 
         #Check if the user is verified
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await interaction.respond("User's not registered!")
+        if not (canvas := self.checkCanvasUser(interaction)):
+            return await interaction.response.send_message("User's not registered!")
         all_modules = self.get_modules(canvas)
         
-        await interaction.respond("Printing modules...")
+        await interaction.response.send_message("Printing modules...")
         messages = {}
         for module_id, course_modules in all_modules.items():
             print()
@@ -156,30 +174,13 @@ class CanvasCog(commands.Cog):
                 return
                 
 
-    @commands.command(description="Returns person's grades")
-    async def grades(self, ctx):
+    @app_commands.command(description="Returns person's grades")
+    async def grades(self, interaction:discord.Interaction):
         #Check if the user is verified
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
-        #Get their enrollments
-        user = canvas.get_current_user()        
-        enrollments = user.get_enrollments()
-        course_ids = []
-        channel = await ctx.author.create_dm()
-        await channel.send("Loading...")
-        grades_string = ""
-        #Loop through their enrollmenets
-        for course in enrollments:
-            #Skip repeated enrollments (bug)
-            if course.course_id in course_ids:
-                continue
-            #Add the course id to the list
-            course_ids.append(course.course_id)
-            #Add the grades to the grade string
-            grades_string = f"{grades_string}+ {canvas.get_course(course.course_id).name}: {course.grades.get('final_grade')} \n"
-        #Send's dm to user about info on their grades
-        await channel.send(f"Grades for **{user.name}**")
-        await channel.send(grades_string)
+        if not (canvas := self.checkCanvasUser(interaction)):
+            return await interaction.response.send_message("User's not registered!")
+
+        await interaction.response.send_message(canvas.grades_string, ephemeral=True)
 
 
     #Function clean up HTML texts
@@ -237,12 +238,12 @@ class CanvasCog(commands.Cog):
                 await self.async_announcement(None, canvas, True, key)
 
     # Gets announcements asynchronously
-    async def async_announcement(self, ctx, canvas: CanvasUser, looped:bool = False, key:str = None) -> None:
+    async def async_announcement(self, interaction:discord.Interaction, canvas: CanvasUser, looped:bool = False, key:str = None) -> None:
         # Get announcements info
         announce_info = self.announcement(canvas)
         #Create a private dm with user
-        channel = await self.guild.get_member(int(key)).create_dm() if looped else await ctx.author.create_dm()
-
+        channel = await self.guild.get_member(int(key)).create_dm() if looped else await interaction.user.create_dm()
+        print(announce_info)
         #Check if the user has unread announcements
         if announce_info[1] > 0:
             #Loop through each course's announcements
@@ -291,48 +292,46 @@ class CanvasCog(commands.Cog):
                 return await channel.send("You have no unread announcements.")
 
 
-    @commands.command(brief="Pulls latest unread announcements", aliases=["an"])
-    async def announcements(self, ctx) -> Union[str, None]:
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
-        return await self.async_announcement(ctx, canvas)
+    @app_commands.command(description="Pulls latest unread announcements")
+    async def announcements(self, interaction:discord.Interaction) -> str:
+        if not (canvas := self.checkCanvasUser(interaction)):
+            return await interaction.send_message("User's not registered!")
+        return await self.async_announcement(interaction, canvas)
 
         
 
-    @commands.command(brief="Toggles Canvas to Discord Notifications", aliases=["tog"])
-    async def toggle(self, ctx, toggleType:str = None) -> Union[str, None]:
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
+    @app_commands.command(description="Toggles Canvas to Discord Notifications")
+    async def toggle(self, interaction:discord.Interaction, toggleType:str = None) -> str:
+        if not (canvas := self.checkCanvasUser(interaction)):
+            return await interaction.response.send_message("User's not registered!")
         #If no input is given 
         if toggleType == None:
             # Send toggle stats
-            await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
-            await ctx.send(f"Upcoming Assignment Notifications: {canvas.due}")
-            return
+            return await interaction.response.send_message(f"Canvas Announcement Notifications: {canvas.notifications}\nUpcoming Assignment Notifications: {canvas.due}")
         elif toggleType == "all":
             #Invert togle stats
             canvas.notifications = not canvas.notifications
             canvas.due = not canvas.due
             #Send toggle stats
-            await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
-            await ctx.send(f"Upcoming Assignment Notifications: {canvas.due}")
-            return
+            return await interaction.response.send_message(f"Canvas Announcement Notifications: {canvas.notifications}\nUpcoming Assignment Notifications: {canvas.due}")
+            
         elif "announce" in toggleType:
             #Invert announcement stat
             canvas.notifications = not canvas.notifications
-            return await ctx.send(f"Canvas Announcement Notifications: {canvas.notifications}")
+            return await interaction.send(f"Canvas Announcement Notifications: {canvas.notifications}")
         elif "assign" in toggleType:
             #Invert assignment stat
             canvas.due = not canvas.due
-            return await ctx.send(f"Upcoming Assignment Notifications: {canvas.due}")
+            return await interaction.response.send_message(f"Upcoming Assignment Notifications: {canvas.due}")
 
 
-    @commands.command(brief="Read/unread announcements", aliases = ["toggleran"])
-    async def toggle_read_all_announcements(self, ctx) -> str:
+    @app_commands.command(description="Read/unread announcements")
+    async def toggle_read(self, interaction:discord.Interaction) -> str:
         #Check if user is registered
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
+        if not (canvas := self.checkCanvasUser(interaction)):
+            return await interaction.response.send_message("User's not registered!")
         #Get announcements
+        await interaction.response.send_message("Toggling")
         announcements: list[Announcement] = self.get_announcements(canvas)
         all_read = []
         #Loop through announcements
@@ -344,13 +343,13 @@ class CanvasCog(commands.Cog):
             #Mark all announcements as read
             for i, announcement in enumerate(announcements):
                 announcement.mark_as_read()
-            return await ctx.send("Read all announcements!")
+            return await interaction.channel.send("Read all announcements!")
         #All announcements are read
         else:
             #Mark all announcements as unread
             for i, announcement in enumerate(announcements):
                 announcement.mark_as_unread()
-            return await ctx.send("Unread all announcements!")
+            return await interaction.channel.send("Unread all announcements!")
 
     #Calculates the time difference between two dates
     def calc_time_diff(self, due_date: datetime) -> int:
@@ -409,9 +408,10 @@ class CanvasCog(commands.Cog):
                 # Get the assignments
                 await self.async_assignments(None, self.get_upcoming_assignments_time(canvas, None, GLOBAL_DAYS, True), key, None, GLOBAL_DAYS, True)
 
-    async def async_assignments(self, ctx, upcoming_assignments: dict[str, list[Assignment]], key: str, course: Union[str, int, None], days: int, looped: bool = False):
+    async def async_assignments(self, interaction:discord.Interaction, upcoming_assignments: dict[str, list[Assignment]], key: str, course: str, days: int, looped: bool = False):
         # Get user's channel
-        channel: Union[TextChannel, DMChannel]  = await self.guild.get_member(int(key)).create_dm() if looped else await ctx.author.create_dm()
+        print(dir(await self.guild.get_member(int(key))))
+        channel = await self.guild.get_member(int(key)).create_dm() if looped else await interaction.user.create_dm()
         # Establish number of assignments
         no_assignments: int = 0
 
@@ -462,11 +462,11 @@ class CanvasCog(commands.Cog):
             if not looped:
                 await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
             
-    @commands.command(brief="Gathers upcoming assignments", aliases = ["due"])
-    async def get_upcoming_assignments(self, ctx, course: Union[str, int] = None, days: int = GLOBAL_DAYS, locked: str = "False"):
+    @app_commands.command(description="Gathers upcoming assignments")
+    async def get_upcoming_assignments(self, interaction:discord.Interaction, course: str = None, days: int = GLOBAL_DAYS, locked: str = "False"):
         # Check if the Canvas User instance exists
-        if not (canvas := self.checkCanvasUser(ctx)):
-            return await ctx.send("User's not registered!")
+        if not (canvas := self.checkCanvasUser(interaction)):
+            return await interaction.response.send_message("User's not registered!")
 
         # Check if the days is the default amount
         # Might need to fix this
@@ -491,13 +491,13 @@ class CanvasCog(commands.Cog):
         elif locked == "False": 
             locked = False
         else:
-            return await ctx.send("Please specify a valid option for the locked parameter")
+            return await interaction.response.send_message("Please specify a valid option for the locked parameter")
         #Check for valid days
         
         if days < 1:
-            return await ctx.send("Please enter a valid amount of days")
+            return await interaction.response.send_message("Please enter a valid amount of days")
         #Get the assignments
-        await self.async_assignments(ctx, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)
+        await self.async_assignments(interaction, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)
 
         
         

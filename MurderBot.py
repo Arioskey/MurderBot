@@ -21,6 +21,7 @@ from random import randint
 from words import allPhrases
 from banned import Banned
 from canvas import CanvasCog
+from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from typing import Optional, Union
 
 
@@ -59,7 +60,7 @@ async def on_ready():
     await bot.wait_until_ready()
     #bot.add_cog(Nick(bot, lists))
     await bot.add_cog(Voice(bot))
-    #bot.add_cog(Software(bot))
+    await bot.add_cog(Software(bot))
     await bot.add_cog(CanvasCog(bot))
 
 
@@ -107,8 +108,8 @@ async def on_ready():
         await nick_cog.set_alt_nick_on_ready()
     
 
-@bot.command()
-async def sync(ctx):
+@bot.tree.command()
+async def sync(interaction:discord.Interaction):
     await bot.tree.sync()
     
     
@@ -130,19 +131,23 @@ async def on_message(message):
     await bot.process_commands(message)
 
 #Error Handling
-@bot.event
-async def on_command_error(ctx, error):
+@bot.tree.error
+async def on_command_error(interaction:discord.Interaction, error):
+    if isinstance(error, discord.app_commands.CommandInvokeError):
+        error = error.original
+    if isinstance(error, InvalidAccessToken):
+        await interaction.response.send_message("Invalid Token")
     if isinstance(error, commands.CommandNotFound):
-        await ctx.send("Unknown Command!")
+        await interaction.response.send_message("Unknown Command!")
     if isinstance(error, commands.ChannelNotFound):
-        await ctx.send("Channel not Found!")
+        await interaction.response.send_message("Channel not Found!")
     if isinstance(error, commands.MemberNotFound):
-        await ctx.send("Member not Found!")
+        await interaction.response.send_message("Member not Found!")
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send('Incorrect arguments entered')
+        await interaction.response.send_message('Incorrect arguments entered')
     if isinstance(error, commands.BadArgument):
-        await ctx.send('Incorrect arguments entered')
-    print('Ignoring exception in command {}:'.format(ctx.command))
+        await interaction.response.send_message('Incorrect arguments entered')
+    print('Ignoring exception in command {}:'.format(interaction.command))
     traceback.print_exception(type(error), error, error.__traceback__)        
 
 

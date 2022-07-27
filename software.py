@@ -2,6 +2,7 @@ from cv2 import split
 import discord
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
+from discord import app_commands
 import asyncio
 
 global permanent_file, alt_file
@@ -17,7 +18,7 @@ class Software(commands.Cog):
     async def on_ready(self):
         pass
 
-    async def isReflexive(self, ctx, relation:list, set:list):
+    async def isReflexive(self, interaction:discord.Interaction, relation:list, set:list, eqv:bool=None):
         reflexive = True
         list = []
         for i, element in enumerate(set):
@@ -26,12 +27,15 @@ class Software(commands.Cog):
                 list.append(f"({check})")
                 reflexive = False
         if reflexive:
-            await ctx.send("RELATION IS **REFLEXIVE!**")
+            if not eqv:
+                await interaction.response.send_message("RELATION IS **REFLEXIVE!**")
             return True
         else:
-            await ctx.send(f"For the relation to be **reflexive** tuple(s): **{[a for a in list]}** MUST be present")
+            if not eqv:
+                await interaction.response.send_message(f"For the relation to be **reflexive** tuple(s): **{[a for a in list]}** MUST be present")
             return False
-    async def isSymmetric(self, ctx, relation:list):
+
+    async def isSymmetric(self, interaction:discord.Interaction, relation:list,eqv:bool=None):
         symmetric = True
         list = []
         for i, element in enumerate(relation):
@@ -46,14 +50,16 @@ class Software(commands.Cog):
                     symmetric = False
 
         if symmetric:
-            await ctx.send("RELATION IS **SYMMETRIC!**")
+            if not eqv:
+                await interaction.response.send_message("RELATION IS **SYMMETRIC!**")
             return True
         else:
-            await ctx.send(f"For the relation to be **symmetric** tuple(s): **{[a for a in list]}** MUST be present")
+            if not eqv:
+                await interaction.response.send_message(f"For the relation to be **symmetric** tuple(s): **{[a for a in list]}** MUST be present")
             return False
 
 
-    async def isTransitive(self, ctx, relation:list):
+    async def isTransitive(self, interaction:discord.Interaction, relation:list, eqv:bool=None):
         transitive = True
         list = []
         for i, element in enumerate(relation):
@@ -74,10 +80,12 @@ class Software(commands.Cog):
                         list.append(f"({check})")
                         transitive = False
         if transitive:
-            await ctx.send("RELATION IS **TRANSITIVE!**")
+            if not eqv:
+                await interaction.response.send_message("RELATION IS **TRANSITIVE!**")
             return True
         else:
-            await ctx.send(f"For the relation to be **transitive** tuple(s): **{[a for a in list]}** MUST be present")
+            if not eqv:
+                await interaction.response.send_message(f"For the relation to be **transitive** tuple(s): **{[a for a in list]}** MUST be present")
             return False
     
     def equivalenceClass(self, node, relation:list):
@@ -91,22 +99,22 @@ class Software(commands.Cog):
                 list.append(char2)
         return list
 
-    async def computeEquivalence(self, ctx, relation:list, set:list):
+    async def computeEquivalence(self, interaction:discord.Interaction, relation:list, set:list):
         list = []
         for i, element in enumerate(set):
             if element not in str(list):
                 list.append(self.equivalenceClass(element, relation))
 
         for i, classes in enumerate(list):
-            await ctx.send(f"EQUIVALENCE CLASS: **{classes}**")
+            await interaction.channel.send(f"EQUIVALENCE CLASS: **{classes}**")
         
         
 
 
 
 
-    @commands.command(brief="Check's a relation's properties")
-    async def check(self, ctx, property:str, *, sets="<Relation>, <Set>"):
+    @app_commands.command(description="Check's a relation's properties\n <Relation> <Set>")
+    async def check(self, interaction:discord.Interaction, property:str, *, sets:str):
         sets = sets.split("}")
         sets[0] = sets[0].replace("{", "")
         sets[1] = sets[1].replace(" {", "")
@@ -118,23 +126,25 @@ class Software(commands.Cog):
         relation = relation.replace("(", "")
         relation = relation.split("), ")
         relation[len(relation)-1] = relation[len(relation)-1].replace(")", "")
+        eqv = True
         if property == "r":
-            await self.isReflexive(ctx, relation, set)
+            await self.isReflexive(interaction, relation, set)
         
         elif property == "s":
-            await self.isSymmetric(ctx, relation)
+            await self.isSymmetric(interaction, relation)
         elif property == "t":
-            await self.isTransitive(ctx, relation)
+            await self.isTransitive(interaction, relation)
         elif property == "e":
-            ref = await self.isReflexive(ctx, relation, set)
-            sym = await self.isSymmetric(ctx, relation) 
-            tran = await self.isTransitive(ctx, relation)
-            if (ref & sym & tran):
-                await ctx.send("RELATION IS **EQUIVALENT**")
-                await self.computeEquivalence(ctx, relation, set)
+            ref = await self.isReflexive(interaction, relation, set, eqv)
+            sym = await self.isSymmetric(interaction, relation, eqv) 
+            tran = await self.isTransitive(interaction, relation, eqv)
+            if (ref and sym and tran):
+                await interaction.response.send_message("RELATION IS **EQUIVALENT**")
+                await self.computeEquivalence(interaction, relation, set)
             else:
-                await ctx.send("RELATION IS **NOT EQUIVALENT**")
-        await ctx.send("DONE!!!!")
+                await interaction.response.send_message("RELATION IS **NOT EQUIVALENT**")
+        else:
+            return await interaction.response.send_message("Unknown property!")
 
 
     
