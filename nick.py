@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
+from discord import app_commands
 import asyncio
 
 global permanent_file, alt_file
@@ -50,14 +51,14 @@ class Nick(commands.Cog):
             fd.close()
         return False
     
-    @commands.command(brief="Checks a user for permanent nickname", aliases=["check_p", "check_perm", "checkp", "checkperm"])
-    async def check_perm_nick(self, ctx, member:discord.Member) -> bool:
+    @app_commands.command(description="Checks a user for permanent nickname")
+    async def check_perm_nick(self, interaction:discord.Interaction, member:discord.Member) -> bool:
         user = member.id
         if self.check_nickname(user, "permanent"):
-            await ctx.send(f"{member.name} does HAVE a permanent nickname!")
+            await interaction.response.send_message(f"{member.name} does HAVE a permanent nickname!")
             return True
         else:
-            await ctx.send(f"{member.name} does NOT HAVE a permanent nickname!")
+            await interaction.response.send_message(f"{member.name} does NOT HAVE a permanent nickname!")
             return False
 
     @commands.command(brief="Clears a user's permanent nickname", aliases=["clear_p", "clear_perm", "clearp", "clearperm"])

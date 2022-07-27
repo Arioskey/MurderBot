@@ -44,25 +44,28 @@ bot = commands.Bot(command_prefix='.', test_guilds= [852379093776465940], intent
 @bot.event
 async def on_ready():
     #Globalise all variables
-    global  guild,  lists, options, out_of_context, perm_nicknames, phrases, target, jumpscareBool
+    global guild, lists, options, out_of_context, perm_nicknames, phrases, target, jumpscareBool
     #Initliase variables and lists
     alt_nicknames = []
     phrases = options[0]
     out_of_context = options[1] 
     perm_nicknames = []
     lists = [perm_nicknames, alt_nicknames]
+    
 
  
 
     #Tell Console we have logged in
     print(f"We have logged in as {bot.user}")
     #Prepare bot
-    await bot.wait_until_ready()
-    #bot.add_cog(Nick(bot, lists))
-    await bot.add_cog(Voice(bot))
-    await bot.add_cog(Software(bot))
+
     await bot.add_cog(CanvasCog(bot))
 
+    await bot.add_cog(Nick(bot, lists))
+    await bot.add_cog(Voice(bot))
+    await bot.add_cog(Software(bot))
+
+    await bot.wait_until_ready()
 
 
     
@@ -108,10 +111,7 @@ async def on_ready():
         await nick_cog.set_alt_nick_on_ready()
     
 
-@bot.tree.command()
-async def sync(interaction:discord.Interaction):
-    await bot.tree.sync()
-    
+
     
 
     
@@ -128,7 +128,8 @@ async def on_message(message):
         randoms = [random1, random2]
         #Send a random message from rohit's past
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
-    await bot.process_commands(message)
+    if message.content.startswith("."):
+        await bot.process_commands(message)
 
 #Error Handling
 @bot.tree.error
@@ -493,6 +494,9 @@ async def change_status(interaction:discord.Interaction, newstatus:discord.Statu
     await interaction.response.send_message(f"Status successfully changed to {newstatus}")
 
 #Run's the bot
+@bot.command()
+async def sync(ctx):
+    await bot.tree.sync()
 
 bot.run(token)
 

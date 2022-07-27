@@ -13,6 +13,8 @@ from html2text import HTML2Text
 from pathlib import Path
 
 import random
+from io import BytesIO
+from fpdf import FPDF
 
 Announcement = canvasapi.discussion_topic.DiscussionTopic
 Assignment = canvasapi.assignment.Assignment
@@ -65,7 +67,7 @@ class CanvasCog(commands.Cog):
         tokens = open(".git/canvas token.txt","r").readlines()
         self.canvas_instances = {
             "238063640601821185": CanvasUser(API_URL,tokens[0]), #aaron
-            "288884848012296202": CanvasUser(API_URL,tokens[1]) #elise
+            "288884848012296202": CanvasUser(API_URL,tokens[1]), #elise
             }
         #Start loops to check for announcements and assignments
         self.check_announcements.start()
@@ -102,7 +104,7 @@ class CanvasCog(commands.Cog):
         except (ResourceDoesNotExist, Forbidden):
             await interaction.response.send_message("Successfully registered user!", ephemeral=True)
         # Add user into the dictionary
-        temp_dict = {str(interaction.author.id):newUser}
+        temp_dict = {str(interaction.user.id):newUser}
         self.canvas_instances.update(temp_dict)
         
 
@@ -113,15 +115,12 @@ class CanvasCog(commands.Cog):
         for course in courses:
             modules[course.id] = list(course.get_modules())
         return modules
-    
-    def downloadFile(self, file):
-        pass
 
     @app_commands.command(description="gets downloadable modules")
     async def modules(self, interaction:discord.Interaction, check_course:str=None):
 
         def check(reaction, user):
-            return user == interaction.author and str(reaction.emoji) in ["⬇️"]
+            return user == interaction.user and str(reaction.emoji) in ["⬇️"]
 
         #Check if the user is verified
         if not (canvas := self.checkCanvasUser(interaction)):
@@ -131,9 +130,9 @@ class CanvasCog(commands.Cog):
         await interaction.response.send_message("Printing modules...")
         messages = {}
         for module_id, course_modules in all_modules.items():
-            print()
+            
             course = canvas.get_course(module_id)
-            print(course.name)
+            
             if check_course != None:
                 check_course = check_course.upper()
                 #Formatting issues
@@ -141,7 +140,8 @@ class CanvasCog(commands.Cog):
 
                 if check_course not in course_name:
                     continue
-            await interaction.channel.send(f"Modules for {course.name}")
+            message = await interaction.channel.send(f"Modules for {course.name}")
+            messages[message] = None
             for module in course_modules:
                 for module_item in module.get_module_items():
                     if module_item.type != "File":
@@ -153,25 +153,26 @@ class CanvasCog(commands.Cog):
                 
         while True:
             try:
-                reaction, user = await self.bot.wait_for("reaction_add", timeout=15, check=check)
+                reaction, user = await self.bot.wait_for("reaction_add", timeout=5, check=check)
                 if reaction.message in messages.keys():
                     message = reaction.message
                     module_item = messages.get(message)
                     if str(reaction.emoji) == "⬇️":
                         await message.remove_reaction(reaction, user)
-                        await interaction.channel.send(f"Downloading {file.filename}")
+                        
                         course = canvas.get_course(module_item.course_id)
-                        file = course.get_file(module_item.content_id)
+                        file_download = course.get_file(module_item.content_id)
+                        await interaction.channel.send(f"Downloading {file_download.filename}")
+                        #file_download.download(f"{str(Path.home())}\\Downloads\\{file_download.filename}")
+                        #await asyncio.sleep(5)
+                        await interaction.channel.send(file=discord.File(BytesIO(file_download.get_contents(binary=True)), filename = f"{file_download.filename}"))
 
-                        file.download(f"{str(Path.home())}\\Downloads\\{file.filename}")
 
                     else:
                         await reaction.message.remove_reaction(reaction, user)
 
             except asyncio.TimeoutError:
-                for message, module_item in messages.items():
-                    await message.delete()
-                return
+                return await interaction.channel.delete_messages([message for message in messages.keys()])
                 
 
     @app_commands.command(description="Returns person's grades")
@@ -206,36 +207,30 @@ class CanvasCog(commands.Cog):
 
     #Announcement function
     def announcement(self, canvas: CanvasUser) -> list[dict[str, Announcement], int]:
-            # Get canvas anouncements
-            announcements: list = self.get_announcements(canvas)
-            # Initialise an announcement dictionary
-            announcements_dict = {}
-            # Set announce counter to 0
-            announce_counter = 0
-            # Loop through announcements
-            for _, announcement in enumerate(announcements):
-                # Check if the course is in the dict
-                if announcement._parent_id not in announcements_dict:
-                    #Create an empty list for that course
-                    announcements_dict[announcement._parent_id] = list()
-                # Check if the announcement is not yet read
-                if announcement.read_state == "unread":
-                    # Increment the counter
-                    announce_counter += 1
-                    # Add the announcement to the announcements dict
-                    announcements_dict[announcement._parent_id].append(announcement)
-                    # Mark the announcement as read via canvas
-                    announcement.mark_as_read()
-            # returns list
-            return announcements_dict, announce_counter
+        # Get canvas anouncements
+        announcements: list = self.get_announcements(canvas)
+        # Initialise an announcement dictionary
+        announcements_dict = {}
+        # Set announce counter to 0
+        announce_counter = 0
+        # Loop through announcements
+        for _, announcement in enumerate(announcements):
+            # Check if the course is in the dict
+            if announcement._parent_id not in announcements_dict:
+                #Create an empty list for that course
+                announcements_dict[announcement._parent_id] = list()
+            # Check if the announcement is not yet read
+            if announcement.read_state == "unread":
+                # Increment the counter
+                announce_counter += 1
+                # Add the announcement to the announcements dict
+                announcements_dict[announcement._parent_id].append(announcement)
+                # Mark the announcement as read via canvas
+                announcement.mark_as_read()
+        # returns list
+        return announcements_dict, announce_counter
 
-    @tasks.loop(minutes = 10)
-    async def check_announcements(self) -> None:
-        #Loop through all CanvasUser instances
-        for key, canvas in self.canvas_instances.items():
-            #Check if they have announcement notifications on
-            if canvas.notifications == True:
-                await self.async_announcement(None, canvas, True, key)
+
 
     # Gets announcements asynchronously
     async def async_announcement(self, interaction:discord.Interaction, canvas: CanvasUser, looped:bool = False, key:str = None) -> None:
@@ -243,7 +238,7 @@ class CanvasCog(commands.Cog):
         announce_info = self.announcement(canvas)
         #Create a private dm with user
         channel = await self.guild.get_member(int(key)).create_dm() if looped else await interaction.user.create_dm()
-        print(announce_info)
+        
         #Check if the user has unread announcements
         if announce_info[1] > 0:
             #Loop through each course's announcements
@@ -261,7 +256,7 @@ class CanvasCog(commands.Cog):
                     embed=discord.Embed(
                     title=f"{announcement.title or 'This announcement has no title'}",
                     url=f"{announcement.html_url or 'https://canvas.auckland.ac.nz'}",
-                    description=f"{text}",
+                    description=f"{text[0:500]}",
                     color=0xFF5733) 
 
                     # Checks if we can see the an author
@@ -295,31 +290,32 @@ class CanvasCog(commands.Cog):
     @app_commands.command(description="Pulls latest unread announcements")
     async def announcements(self, interaction:discord.Interaction) -> str:
         if not (canvas := self.checkCanvasUser(interaction)):
-            return await interaction.send_message("User's not registered!")
+            return await interaction.response.send_message("User's not registered!")
+        await interaction.response.send_message("Getting latest announcements")
         return await self.async_announcement(interaction, canvas)
 
         
 
     @app_commands.command(description="Toggles Canvas to Discord Notifications")
-    async def toggle(self, interaction:discord.Interaction, toggleType:str = None) -> str:
+    async def toggle(self, interaction:discord.Interaction, toggle_type:str = None) -> str:
         if not (canvas := self.checkCanvasUser(interaction)):
             return await interaction.response.send_message("User's not registered!")
         #If no input is given 
-        if toggleType == None:
+        if toggle_type == None:
             # Send toggle stats
             return await interaction.response.send_message(f"Canvas Announcement Notifications: {canvas.notifications}\nUpcoming Assignment Notifications: {canvas.due}")
-        elif toggleType == "all":
+        elif toggle_type == "all":
             #Invert togle stats
             canvas.notifications = not canvas.notifications
             canvas.due = not canvas.due
             #Send toggle stats
             return await interaction.response.send_message(f"Canvas Announcement Notifications: {canvas.notifications}\nUpcoming Assignment Notifications: {canvas.due}")
             
-        elif "announce" in toggleType:
+        elif "announce" in toggle_type:
             #Invert announcement stat
             canvas.notifications = not canvas.notifications
             return await interaction.send(f"Canvas Announcement Notifications: {canvas.notifications}")
-        elif "assign" in toggleType:
+        elif "assign" in toggle_type:
             #Invert assignment stat
             canvas.due = not canvas.due
             return await interaction.response.send_message(f"Upcoming Assignment Notifications: {canvas.due}")
@@ -399,6 +395,14 @@ class CanvasCog(commands.Cog):
 
         return assignments
 
+    @tasks.loop(minutes = 10)
+    async def check_announcements(self) -> None:
+        #Loop through all CanvasUser instances
+        for key, canvas in self.canvas_instances.items():
+            #Check if they have announcement notifications on
+            if canvas.notifications == True:
+                await self.async_announcement(None, canvas, True, key)
+                
     @tasks.loop(minutes = 60)
     async def check_assignments(self):
         # Loop through Canvas User instances
@@ -406,11 +410,10 @@ class CanvasCog(commands.Cog):
             # Check if they have notifications on for due assignments
             if canvas.due == True:
                 # Get the assignments
-                await self.async_assignments(None, self.get_upcoming_assignments_time(canvas, None, GLOBAL_DAYS, True), key, None, GLOBAL_DAYS, True)
+                await self.async_assignments(None, self.get_upcoming_assignments_time(canvas, None, GLOBAL_DAYS, False), key, None, GLOBAL_DAYS, True)
 
     async def async_assignments(self, interaction:discord.Interaction, upcoming_assignments: dict[str, list[Assignment]], key: str, course: str, days: int, looped: bool = False):
         # Get user's channel
-        print(dir(await self.guild.get_member(int(key))))
         channel = await self.guild.get_member(int(key)).create_dm() if looped else await interaction.user.create_dm()
         # Establish number of assignments
         no_assignments: int = 0
@@ -463,7 +466,7 @@ class CanvasCog(commands.Cog):
                 await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
             
     @app_commands.command(description="Gathers upcoming assignments")
-    async def get_upcoming_assignments(self, interaction:discord.Interaction, course: str = None, days: int = GLOBAL_DAYS, locked: str = "False"):
+    async def assignments(self, interaction:discord.Interaction, course: str = None, days: int = GLOBAL_DAYS, locked: str = "False"):
         # Check if the Canvas User instance exists
         if not (canvas := self.checkCanvasUser(interaction)):
             return await interaction.response.send_message("User's not registered!")
@@ -498,13 +501,3 @@ class CanvasCog(commands.Cog):
             return await interaction.response.send_message("Please enter a valid amount of days")
         #Get the assignments
         await self.async_assignments(interaction, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)
-
-        
-        
-
-
-            
-
-
-
-        
