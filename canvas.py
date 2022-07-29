@@ -256,7 +256,7 @@ class CanvasCog(commands.Cog):
                     embed=discord.Embed(
                     title=f"{announcement.title or 'This announcement has no title'}",
                     url=f"{announcement.html_url or 'https://canvas.auckland.ac.nz'}",
-                    description=f"{text[0:500]}",
+                    description=f"{text[0:1500]}" if len(text) > 1500 else f"{text}",
                     color=0xFF5733) 
 
                     # Checks if we can see the an author
@@ -419,6 +419,7 @@ class CanvasCog(commands.Cog):
         no_assignments: int = 0
 
         # Loop through the upcoming assignments
+        text = ""
         for key, assignments in upcoming_assignments.items():
             #If we have a valid course
             if course != None:
@@ -435,31 +436,21 @@ class CanvasCog(commands.Cog):
             if len(assignments) == 0:
                 no_assignments += 1
                 continue
-            
+
             # Loop through each assignment
             for assignment in assignments:
                 #Get the due date
                 due_date: datetime = assignment.due_at_date
                 # Get complete by date in UNIX time
                 complete_by = str(int(time.mktime(due_date.timetuple())) + 43200)
-
-                # Create embed for discord
-                embed=discord.Embed(
-                title=f"{assignment.name or 'This assignment has no name'}",
-                url=f"{assignment.html_url or 'https://canvas.auckland.ac.nz'}",
-                description=f"**This assignment is due <t:{complete_by}:R> on <t:{complete_by}:F>**\n\nMessages sent about assignment reminders may be delayed or not even be sent at all! *Don't solely rely on this for reminders, this is may be unstable and should serve as a last resort*",
-                color=0xFF5733) 
-                #C Check if we have a key
-                if key:
-                    embed.set_author(
-                    name=f"{key or 'Unknown Course'}",
-                    #icon_url=assignment.profile['avatar_url'],
-                    url=f"{assignment.html_url or 'https://canvas.auckland.ac.nz'}"
-                    )
-                # Send the messages
-                await channel.send(f"\n**There will be an assignment/quiz due soon:** {assignment.name or ''}\n{assignment.html_url}\n*This __won't__ be updated if the assignment due date is changed.*")
-
-                await channel.send(embed=embed)
+                text = text + f"**[{assignment.name or 'No title'}]({assignment.html_url or 'https://canvas.auckland.ac.nz'})**\n*[{key or 'Unknown Course'}]({assignment.html_url or 'https://canvas.auckland.ac.nz'})*\n> due <t:{complete_by}:R> on <t:{complete_by}:F>\n\n"
+           
+            # Create embed for discord
+        embed=discord.Embed(
+        title = "Deadlines",
+        description=text,
+        color=0xFF5733) 
+        await channel.send(embed=embed)
         # Check if we have no announcements
         if no_assignments == len(upcoming_assignments):
             if not looped:
@@ -468,8 +459,9 @@ class CanvasCog(commands.Cog):
     @app_commands.command(description="Gathers upcoming assignments")
     async def assignments(self, interaction:discord.Interaction, course: str = None, days: int = GLOBAL_DAYS, locked: str = "False"):
         # Check if the Canvas User instance exists
+        await interaction.response.defer(ephemeral=True, thinking=True)
         if not (canvas := self.checkCanvasUser(interaction)):
-            return await interaction.response.send_message("User's not registered!")
+            return await interaction.edit_original_message(content="User's not registered!")
 
         # Check if the days is the default amount
         # Might need to fix this
@@ -494,10 +486,11 @@ class CanvasCog(commands.Cog):
         elif locked == "False": 
             locked = False
         else:
-            return await interaction.response.send_message("Please specify a valid option for the locked parameter")
+            return await interaction.edit_original_message(content="Please specify a valid option for the locked parameter")
         #Check for valid days
         
         if days < 1:
-            return await interaction.response.send_message("Please enter a valid amount of days")
+            return await interaction.edit_original_message(content="Please enter a valid amount of days")
+        await interaction.edit_original_message(content="Loading assignments")
         #Get the assignments
         await self.async_assignments(interaction, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)

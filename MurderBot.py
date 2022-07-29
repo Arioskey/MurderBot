@@ -130,6 +130,11 @@ async def on_message(message):
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
     if message.content.startswith("."):
         await bot.process_commands(message)
+    if message.content.startswith('!hello'):
+        embedVar = discord.Embed(title="Title", description="Desc", color=0x00ff00)
+        embedVar.add_field(name="Field1", value="hi", inline=True)
+        embedVar.add_field(name="Field2", value="hi2", inline=False)
+        await message.channel.send(embed=embedVar)
 
 #Error Handling
 @bot.tree.error
@@ -148,6 +153,8 @@ async def on_command_error(interaction:discord.Interaction, error):
         await interaction.response.send_message('Incorrect arguments entered')
     if isinstance(error, commands.BadArgument):
         await interaction.response.send_message('Incorrect arguments entered')
+    if isinstance(error, discord.errors.NotFound):
+        await interaction.channel.send("MurderBot was having a moment, try again!")
     print('Ignoring exception in command {}:'.format(interaction.command))
     traceback.print_exception(type(error), error, error.__traceback__)        
 
