@@ -70,8 +70,8 @@ class CanvasCog(commands.Cog):
             "288884848012296202": CanvasUser(API_URL,tokens[1]), #elise
             }
         #Start loops to check for announcements and assignments
-        self.check_announcements.start()
-        #self.check_assignments.start()
+        # self.check_announcements.start()
+        self.check_assignments.start()
     
     #Method to check if user is a discord user
     def checkCanvasUser(self, interaction:discord.Interaction):
@@ -461,7 +461,7 @@ class CanvasCog(commands.Cog):
         # Check if the Canvas User instance exists
         await interaction.response.defer(ephemeral=True, thinking=True)
         if not (canvas := self.checkCanvasUser(interaction)):
-            return await interaction.edit_original_message(content="User's not registered!")
+            return await interaction.edit_original_response(content="User's not registered!")
 
         # Check if the days is the default amount
         # Might need to fix this
@@ -486,11 +486,11 @@ class CanvasCog(commands.Cog):
         elif locked == "False": 
             locked = False
         else:
-            return await interaction.edit_original_message(content="Please specify a valid option for the locked parameter")
+            return await interaction.edit_original_response(content="Please specify a valid option for the locked parameter")
         #Check for valid days
         
         if days < 1:
-            return await interaction.edit_original_message(content="Please enter a valid amount of days")
-        await interaction.edit_original_message(content="Loading assignments")
+            return await interaction.edit_original_response(content="Please enter a valid amount of days")
+        await interaction.edit_original_response(content="Loading assignments")
         #Get the assignments
         await self.async_assignments(interaction, self.get_upcoming_assignments_time(canvas, course, days, locked), None, course, days, False)
