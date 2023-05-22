@@ -23,6 +23,7 @@ from banned import Banned
 from canvas import CanvasCog
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from typing import Optional, Union
+from datetime import datetime
 
 
 # Variables
@@ -255,7 +256,9 @@ async def on_voice_state_update(member, before, after):
 
     #On disconnect
     if before.channel and not after.channel:
-        print(f'{member} has left {before.channel}')
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        print(current_time, f'{member} has left {before.channel}')
         if member.id in bannedMembers:
             memberPos = bannedMembers.index(member.id)
             ban = bans[memberPos]
@@ -279,7 +282,9 @@ async def on_voice_state_update(member, before, after):
 
     #On channel connect
     if after.channel:
-        print(f'{member} has joined {after.channel}')
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        print(current_time,f'{member} has joined {after.channel}')
         if member.id in timedOutMembers:
             await member.move_to(None, reason="Timed out")
             await channel.send(f"{member} tried to rejoin VC but had too many injuries from falling off the coaster!")
@@ -434,7 +439,9 @@ snipe_message_content = {}
 
 @bot.event
 async def on_message_delete(message):
-    print(f"A message was deleted in channel {message.channel}")
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print(current_time, f"A message was deleted in channel {message.channel}")
     print(f"{message.author} said:\n{message.content}")
     if message.author.id == 975378100630216704:
         #await message.channel.send(message.content)
