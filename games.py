@@ -12,6 +12,12 @@ class Games(commands.Cog):
 
     @app_commands.command(description = "Play Connect4 once I actually make this work")
     async def connect4(self, interaction: discord.Interaction):
+
+        reactions = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣"]
+        board = [['⚫', ] * 7] * 6
+        global turns
+        turns = 1
+
         def generateDisplay(board):
             pBoard = ''
             for row in board:
@@ -21,26 +27,42 @@ class Games(commands.Cog):
             return pBoard
 
         async def reactControls(game):
-            await game.add_reaction("1️⃣")
-            await game.add_reaction("2️⃣")
-            await game.add_reaction("3️⃣")
-            await game.add_reaction("4️⃣")
-            await game.add_reaction("5️⃣")
-            await game.add_reaction("6️⃣")
-            await game.add_reaction("7️⃣")
+            for item in reactions:
+                await game.add_reaction(item)
 
         def reactValid(reaction, user):
-            return user == interaction.user and str(reaction.emoji) in ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣"]
+            return user == interaction.user and str(reaction.emoji) in reactions
+
+        def readReaction(reaction):
+            return reactions.index(str(reaction.emoji))
         
-        board = [['⚫', ] * 7] * 6
+        async def UpdateBoard(reactionIndex, board):
+            global turns
+            count = 0
+            for row in reversed(board):
+                if row[reactionIndex] == '⚫':
+                    if turns % 2 == 0:
+                        board[count][reactionIndex] = '🟡'
+                    else:
+                        board[count][reactionIndex] = '🔴'
+                    turns += 1
+                count += 1
+            generateDisplay(board)
+            game = await interaction.channel.send(display)
+            await reactControls(game)
+
+        #Initialises board
         display = generateDisplay(board)
         game = await interaction.channel.send(display)
         await reactControls(game)
 
         while True:
-            reaction, user = await self.bot.wait_for("reaction_add", timeout=15, check = reactValid)
+            reaction, user = await self.bot.wait_for("reaction_add", check = reactValid)
             if reactValid:
                 await game.remove_reaction(reaction,user)
+                await UpdateBoard(readReaction(reaction), board)
+
+
 
         
 

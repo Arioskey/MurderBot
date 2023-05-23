@@ -315,8 +315,8 @@ async def rollercoaster(interaction:discord.Interaction, member:discord.Member=N
     #Check if no target
     if member == None:
         member = interaction.user
-    if member.id == 238063640601821185:
-        member = interaction.user
+    #if member.id == 238063640601821185:
+        #member = interaction.user
     if interaction.user.id == 694382869367226368:
         #if member.id == 288884848012296202:
         member = interaction.user
