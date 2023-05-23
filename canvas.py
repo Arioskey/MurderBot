@@ -66,8 +66,8 @@ class CanvasCog(commands.Cog):
         #Instantiate Tokens so they do not need to login
         tokens = open(".git/canvas token.txt","r").readlines()
         self.canvas_instances = {
-            "238063640601821185": CanvasUser(API_URL,tokens[0]), #aaron
-            "288884848012296202": CanvasUser(API_URL,tokens[1]), #elise
+            #"238063640601821185": CanvasUser(API_URL,tokens[0]), #aaron
+            "288884848012296202": CanvasUser(API_URL,tokens[0]), #elise
             }
         #Start loops to check for announcements and assignments
         # self.check_announcements.start()
