@@ -32,8 +32,8 @@ class CanvasUser(Canvas):
     def __init__(self, base_url, access_token):
         super().__init__(base_url, access_token)
         #By default turn off announcement notifications
-        self.notifications = True
-        self.due = True
+        self.notifications = False
+        self.due = False
         self.get_grades()
 
 
