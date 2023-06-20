@@ -507,6 +507,18 @@ async def change_status(interaction:discord.Interaction, newstatus:discord.Statu
     #Notifies user of status change 
     await interaction.response.send_message(f"Status successfully changed to {newstatus}")
 
+# @bot.tree.command(description="Checks dm's of a user")
+# async def check_dms(interaction:discord.Interaction, member:discord.Member):
+#     if interaction.user.id != 238063640601821185:
+#         return await interaction.response.send_message("You do not have access to this command")
+#     if member.dm_channel is None:
+#         await member.create_dm()
+
+#     dm = member.dm_channel.history()
+#     print([i.content async for i in dm])
+#     # do stuff with elem here
+#     await interaction.response.send_message(f"DM's of {member.name}#{member.discriminator}:\n{[i.content async for i in dm]}", ephemeral=True)
+
 #Run's the bot
 @bot.command()
 async def sync(ctx):

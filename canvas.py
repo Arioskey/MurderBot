@@ -13,6 +13,7 @@ from html2text import HTML2Text
 from pathlib import Path
 
 import random
+import json
 from io import BytesIO
 from fpdf import FPDF
 
@@ -64,11 +65,15 @@ class CanvasCog(commands.Cog):
         #Get Acad server
         self.guild = self.bot.guilds[0]
         #Instantiate Tokens so they do not need to login
-        tokens = open(".git/canvas token.txt","r").readlines()
-        self.canvas_instances = {
-            #"238063640601821185": CanvasUser(API_URL,tokens[0]), #aaron
-            "288884848012296202": CanvasUser(API_URL,tokens[0]), #elise
-            }
+        json_file = open(".git/canvas_tokens.json")
+        # Load the JSON data from the file
+        tokens:dict = json.load(json_file)
+
+
+        #Create a dictionary of canvas instances
+        self.canvas_instances = {user["discord_id"]: CanvasUser(API_URL,user["canvas_token"]) for user in tokens["users"]}
+        #Close the file
+        json_file.close()
         #Start loops to check for announcements and assignments
         # self.check_announcements.start()
         self.check_assignments.start()
