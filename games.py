@@ -12,7 +12,7 @@ class Games(commands.Cog):
     
     @app_commands.command(description = "Play Connect4 once I actually make this work")
     async def connect4(self, interaction: discord.Interaction):
-
+        await interaction.response.defer(ephemeral=True, thinking=True)
         global game, board, turnNo, channel
         channel = interaction.channel
         reactions = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣"]
@@ -31,9 +31,10 @@ class Games(commands.Cog):
                 pBoard += '\n'
             return pBoard
 
-        async def reactControls(game):
-            for item in reactions:
+        async def reactControls(game: discord.Message):
+            for _, item in enumerate(reactions):
                 await game.add_reaction(item)
+
 
         def reactValid(reaction, user):
             if turnNo % 2 == 0:
@@ -64,38 +65,27 @@ class Games(commands.Cog):
 
         #Challenge user to game
         await interaction.channel.send(f'{interaction.user.mention} has challenged you to a game of Connect4! Do you accept?')  
+        await interaction.edit_original_response(content = "Game request sent")
 
-        # #Creates buttons for accept and decline
-        # button = discord.ui.Button(style = discord.ButtonStyle.green, label = "Accept")
-        # button2 = discord.ui.Button(style = discord.ButtonStyle.red, label = "Decline")
-        # actionRow = [button, button2]
-        # ##sends message with buttons
-        # await channel.send("Click the button to accept or decline", components = [actionRow])
-        # interaction = await self.wait_for("button_click", check = lambda i: i.component.label.startswith("Accept") or i.component.label.startswith("Decline"))
-        # if interaction.component.label == "Accept":
-        #     await interaction.channel.send("Game accepted!")
-        #     player2 = interaction.user
-        #     display = generateDisplay(board)
-        #     game = await interaction.channel.send(display)
-        #     await reactControls(game)
-        # else:
-        #     await interaction.channel.send("Game declined!")
-        #     return
-
+        @self.bot.event
+        async def on_reaction_add(reaction, user):
+            if reactValid(reaction, user):
+                await game.remove_reaction(reaction,user)
+                await UpdateBoard(readReaction(reaction), board)
+                
         class Connect4View(discord.ui.View):
             def __init__(self, parentInteraction):
                 super().__init__(timeout = None)
-                self.parentInteraction = parentInteraction
+                self.parentInteraction: discord.Interaction = parentInteraction
 
-            @discord.ui.button(label = "Accept", style = discord.ButtonStyle.green)
-            async def acceptButton(self, button: discord.ui.Button, interaction: discord.Interaction):
-                print(interaction.type)
-                await self.parentInteraction.channel.send("Game accepted!")
-                print(interaction.type)
+            @discord.ui.button(label = "Accept", style = discord.ButtonStyle.success)
+            async def acceptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
+
                 player2 = interaction.user
-                for child in self.children: # Disables all buttons so cannot be pressed again
+                for child in self.children:
                     child.disabled = True
-                await self.parentInteraction.channel.send("Game accepted!")
+
+                await interaction.response.edit_message(view=self)
                 
                 #Initialises board
                 print(f'Player 1: {player1}, Player2: {player2}')
@@ -104,18 +94,15 @@ class Games(commands.Cog):
                 await reactControls(game)
 
             @discord.ui.button(label = "Decline", style = discord.ButtonStyle.red)
-            async def declineButton(self, button: discord.ui.Button, interaction: discord.Interaction):
-                await self.parentInteraction.channel.send("Game declined!")
+            async def declineButton(self, interaction: discord.Interaction, button: discord.ui.Button):
+                button.view.disable_all_items()
+                await interaction.response.edit_message(view=self)
                 return
         
         #Sends message with buttons
         await interaction.channel.send("Click the button to accept or decline", view = Connect4View(interaction))
         
-        @self.bot.event
-        async def on_reaction_add(reaction, user):
-            if reactValid(reaction, user):
-                await game.remove_reaction(reaction,user)
-                await UpdateBoard(readReaction(reaction), board)
+
 
 
 
