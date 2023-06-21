@@ -25,6 +25,9 @@ from games import Games
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from typing import Optional, Union
 from datetime import datetime
+from requests import get
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageOps
 
 # Variables
 token = open(".git/token.txt","r").read()
@@ -156,6 +159,9 @@ async def on_command_error(interaction:discord.Interaction, error):
         await interaction.response.send_message('Incorrect arguments entered')
     if isinstance(error, discord.errors.NotFound):
         await interaction.channel.send("MurderBot was having a moment, try again!")
+    if isinstance(error, discord.app_commands.errors.TransformerError):
+        await interaction.response.send_message("Incorrect arguments entered")
+        await interaction.channel.send(f"{error}")
     print('Ignoring exception in command {}:'.format(interaction.command))
     traceback.print_exception(type(error), error, error.__traceback__)        
 
@@ -480,12 +486,12 @@ async def snipe_clear(interaction:discord.Interaction):
 async def delete_messages(interaction:discord.Interaction, member:discord.Member, limit:int, channel:discord.TextChannel=None):
     if channel == None:
         channel = interaction.channel
-    if interaction.message.author.id != 238063640601821185:
+    if interaction.user.id != 238063640601821185:
         return await interaction.response.send_message("You do not have access to this command")
     counter = 0
     msgs = []
     extra = 0
-    if interaction.message.author.id == member.id:
+    if interaction.user.id == member.id:
         extra = 1
     for msg in await channel.history().flatten():
         if msg.author.id == member.id:
@@ -507,6 +513,49 @@ async def change_status(interaction:discord.Interaction, newstatus:discord.Statu
     #Notifies user of status change 
     await interaction.response.send_message(f"Status successfully changed to {newstatus}")
 
+
+#Pull's user's profile picture
+@bot.tree.command(description="Pulls user's profile picture")
+async def pfp(interaction:discord.Interaction, member:discord.User = None):
+    #If no member is specified, it will pull the profile picture of the user who sent the command
+    if member == None:
+        member:discord.Member = interaction.user
+    #Sends the profile picture of the member
+    if member.avatar is None:
+        return await interaction.response.send_message("This user does not have a profile picture", ephemeral=True)
+    return await interaction.response.send_message(member.avatar, ephemeral=True)
+
+@bot.tree.command(description="Create a custom emoji")
+async def create_emoji(interaction:discord.Interaction, name:str, link:str=None, circular:bool=False):
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    if link is None:
+        response = get(interaction.user.avatar)
+    else:
+        response = get(link)
+
+    image = Image.open(BytesIO(response.content))
+    image = image.convert("RGBA")
+    # Resize and compress the image
+    max_size = (128, 128)  # Adjust the maximum size as needed
+    image.thumbnail(max_size, Image.ANTIALIAS)
+
+    if circular:
+        # Create a circular mask
+        mask = Image.new("L", image.size, 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0) + image.size, fill=255)
+
+        # Apply the mask and crop the image
+        masked_image = ImageOps.fit(image, mask.size, centering=(0.5, 0.5))
+        image = Image.composite(masked_image, Image.new("RGBA", mask.size), mask)
+
+    image_buffer = BytesIO()
+    image.save(image_buffer, format="PNG")  # Save the image to the buffer
+    image_buffer.seek(0)
+        
+    await interaction.guild.create_custom_emoji(name=name, image=image_buffer.read())
+    return await interaction.edit_original_response(content=f"Created emoji {name}")
+
 # @bot.tree.command(description="Checks dm's of a user")
 # async def check_dms(interaction:discord.Interaction, member:discord.Member):
 #     if interaction.user.id != 238063640601821185:
@@ -519,11 +568,17 @@ async def change_status(interaction:discord.Interaction, newstatus:discord.Statu
 #     # do stuff with elem here
 #     await interaction.response.send_message(f"DM's of {member.name}#{member.discriminator}:\n{[i.content async for i in dm]}", ephemeral=True)
 
-#Run's the bot
 @bot.command()
 async def sync(ctx):
     await bot.tree.sync()
 
+@bot.tree.command(description="Syncs the slash commands")
+async def sync(interaction:discord.Interaction):
+    await interaction.response.defer(ephemeral=False, thinking=True)
+    await bot.tree.sync()
+    return await interaction.edit_original_response(content="Synced slash commands")
+
+#Run's the bot
 bot.run(token)
 
 
