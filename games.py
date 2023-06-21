@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 import asyncio
+from time import time
 
 from requests import get
 from io import BytesIO
@@ -14,15 +15,23 @@ class Emoji:
         self.id = id
 
 class Games(commands.Cog):
+    games = {}
     def __init__(self, bot):
         self.bot = bot
         self.guild = self.bot.guilds[0]
+
+
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.id in self.games and self.finished:
+            print("Finished game!")
+            game:Connect4Game = self.games[interaction.id]
+            await game.cleanup()
 
     global Connect4Game
     class Connect4Game:
         def __init__(self, game):
             self.game = game
-            self.parentInteraction = self.game.interaction
+            self.parentInteraction:discord.Interaction = self.game.interaction
             self.reactions = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣"]
             self.channel: discord.TextChannel = self.parentInteraction.channel
             self.board = [["⚫" for _ in range(7)] for _ in range(6)]
@@ -33,6 +42,7 @@ class Games(commands.Cog):
             self.errorMessage: discord.Message = None
             self.emoji1:Emoji = None
             self.emoji2:Emoji = None
+            self.lastInteractionTime = time()
 
 
         def generateDisplay(self, board):
@@ -56,6 +66,37 @@ class Games(commands.Cog):
         def readReaction(self, reaction):
             return self.reactions.index(str(reaction.emoji))
         
+        async def cleanup(self):
+            await self.game_message.delete() #< --- Might not be needed (Save the game in chat history)
+            if self.emoji1 is not None:
+                await self.parentInteraction.guild.delete_emoji(self.emoji1, reason = "Removed Connect4 emoji")
+            if self.emoji2 is not None:
+                await self.parentInteraction.guild.delete_emoji(self.emoji2, reason = "Removed Connect4 emoji")
+            await self.parentInteraction.delete_original_response() #< --- Might not be needed (Save the game in chat history)
+            print("Cleaned up game")
+            return True
+        
+        async def timeout_cleanup(self, custom_id):
+            print(custom_id)
+            print(self.game.games)
+            if custom_id in self.game.games:
+                game:Connect4Game = self.game.games[custom_id]
+                print(time() - game.lastInteractionTime)
+                if time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
+                    print("Removing emojis")
+                    await game.cleanup()
+                    del self.game.games[custom_id]
+                    return True
+            return False
+
+
+        async def timeout_cleanup_task(self, custom_id):
+            while True:
+                if await self.timeout_cleanup(custom_id):
+                    break
+                await asyncio.sleep(5)
+            print("Task complete")
+            return True
 
             
 
@@ -88,14 +129,17 @@ class Games(commands.Cog):
                 super().__init__(timeout=None)
                 self.game_instance:Connect4Game = game_instance
                 
-
-
-
                 @self.game_instance.game.bot.event
                 async def on_reaction_add(reaction, user):
+                    if user.id not in [self.game_instance.player1.id, self.game_instance.player2.id, self.game_instance.game.bot.user.id]:
+                        await self.game_instance.game_message.remove_reaction(reaction, user)
                     if self.game_instance.reactValid(reaction, user):
                         await self.game_instance.game_message.remove_reaction(reaction, user)
                         await self.game_instance.UpdateBoard(self.game_instance.readReaction(reaction), self.game_instance.board)
+                        self.game_instance.lastInteractionTime = time()
+            
+            async def cleanup(self):
+                await self.game_instance.cleanup()
 
             @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
             async def acceptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -135,6 +179,9 @@ class Games(commands.Cog):
                 for child in self.children:
                     child.disabled = True
 
+                self.game_instance.game.finished = False
+                self.game_instance.game.games[self.game_instance.parentInteraction.id] = self.game_instance
+
                 await interaction.response.edit_message(view=self)
                 self.game_instance.emoji1 = Emoji("player1", await create_emoji(self, "player1", self.game_instance.player1.avatar))
                 self.game_instance.emoji2 = Emoji("player2", await create_emoji(self, "player2", self.game_instance.player2.avatar))
@@ -146,7 +193,8 @@ class Games(commands.Cog):
 
             @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
             async def declineButton(self, interaction: discord.Interaction, button: discord.ui.Button):
-                button.view.disable_all_items()
+                for child in self.children:
+                    child.disabled = True
                 await interaction.response.edit_message(view=self)
                 return
 
@@ -164,10 +212,15 @@ class Games(commands.Cog):
         await interaction.channel.send(f'{interaction.user.mention} has challenged you to a game of Connect4! Do you accept?')
         await interaction.edit_original_response(content="Game request sent")
         self.interaction = interaction
+        
+
         # Create an instance of the Connect4Game class
         connect4_game:Connect4Game = Connect4Game(self)
         # Sends message with buttons
         await interaction.channel.send("Click the button to accept or decline", view=connect4_game.Connect4View(connect4_game))
+        # Schedule timeout cleanup after 10 seconds
+        asyncio.create_task(connect4_game.timeout_cleanup_task(interaction.id))
+        
 
 
 
