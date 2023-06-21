@@ -77,11 +77,9 @@ class Games(commands.Cog):
             return True
         
         async def timeout_cleanup(self, custom_id):
-            print(custom_id)
-            print(self.game.games)
             if custom_id in self.game.games:
                 game:Connect4Game = self.game.games[custom_id]
-                print(time() - game.lastInteractionTime)
+                #print(time() - game.lastInteractionTime)
                 if time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
                     print("Removing emojis")
                     await game.cleanup()
@@ -179,6 +177,7 @@ class Games(commands.Cog):
                 for child in self.children:
                     child.disabled = True
 
+                self.lastInteractionTime = time()
                 self.game_instance.game.finished = False
                 self.game_instance.game.games[self.game_instance.parentInteraction.id] = self.game_instance
 
