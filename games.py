@@ -20,12 +20,39 @@ class Games(commands.Cog):
         self.bot:Bot = bot
         self.guild = self.bot.guilds[0]
 
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction:discord.Reaction, user:discord.User):
+        print("Reaction added")
+        game_instance:Connect4Game = Games.games.get(reaction.message.id)
+        if game_instance.finished or user.id == game_instance.game.bot.user.id:
+            return
+        print(reaction.message.id)
+        print(game_instance.game_message.id)
+            # await self.game_instance.game_message.remove_reaction(reaction, user)
+            # self.game_instance.errorMessage = await self.game_instance.parentInteraction.channel.send("Please wait before making a move!")
+            # return await self.game_instance.errorMessage.delete(delay=2) if self.game_instance.errorMessage else None
 
-    async def on_interaction(self, interaction: discord.Interaction):
-        if interaction.id in self.games and self.finished:
-            print("Finished game!")
-            game:Connect4Game = self.games[interaction.id]
-            await game.cleanup()
+        if user.id not in [game_instance.player1.id, game_instance.player2.id, self.bot.user.id]:
+            return await game_instance.game_message.remove_reaction(reaction, user)
+
+        if game_instance.reactValid(reaction, user, message = game_instance.game_message.id):
+            await game_instance.game_message.remove_reaction(reaction, user)
+            await game_instance.update_board(game_instance.readReaction(reaction), game_instance.board)
+            game_instance.lastInteractionTime = time()
+        else:
+            await game_instance.game_message.remove_reaction(reaction, user)
+            game_instance.errorMessage = await game_instance.channel.send(f"It is not your turn!")
+            return await game_instance.errorMessage.delete(delay=2) if game_instance.errorMessage else None
+
+        if await game_instance.check_win_all() and not game_instance.finished:
+            game_instance.finished = True
+            #Creates new message with the winner
+            await game_instance.channel.send(f"{game_instance.player1.mention} won!") if game_instance.turnNo % 2 != 0 else await game_instance.channel.send(f"{game_instance.player2.mention} won!")
+            await game_instance.cleanup()
+        if game_instance.turnNo == 42:
+            game_instance.finished = True
+            await game_instance.channel.send("It's a tie!")
+            await game_instance.cleanup()
 
     global Connect4Game
     class Connect4Game:
@@ -89,7 +116,7 @@ class Games(commands.Cog):
                     return True
         
         async def timeout_cleanup(self, custom_id):
-            print(Games.games)
+            # print(Games.games)
             if custom_id in Games.games:
                 game:Connect4Game = Games.games[custom_id]
                 #print(time() - game.lastInteractionTime)
@@ -175,38 +202,6 @@ class Games(commands.Cog):
                 super().__init__(timeout=None)
                 self.game_instance:Connect4Game = game_instance
                 
-                @self.game_instance.game.bot.event
-                async def on_reaction_add(reaction, user):
-                    print("Reaction added")
-                    print(self.game_instance.game_message.id)
-                    if self.game_instance.finished or user.id == self.game_instance.game.bot.user.id:
-                        return
-                    
-                        # await self.game_instance.game_message.remove_reaction(reaction, user)
-                        # self.game_instance.errorMessage = await self.game_instance.parentInteraction.channel.send("Please wait before making a move!")
-                        # return await self.game_instance.errorMessage.delete(delay=2) if self.game_instance.errorMessage else None
-
-                    if user.id not in [self.game_instance.player1.id, self.game_instance.player2.id, self.game_instance.game.bot.user.id]:
-                        return await self.game_instance.game_message.remove_reaction(reaction, user)
-
-                    if self.game_instance.reactValid(reaction, user, message = self.game_instance.game_message.id):
-                        await self.game_instance.game_message.remove_reaction(reaction, user)
-                        await self.game_instance.update_board(self.game_instance.readReaction(reaction), self.game_instance.board)
-                        self.game_instance.lastInteractionTime = time()
-                    else:
-                        await self.game_instance.game_message.remove_reaction(reaction, user)
-                        self.game_instance.errorMessage = await self.game_instance.channel.send(f"It is not your turn!")
-                        return await self.game_instance.errorMessage.delete(delay=2) if self.game_instance.errorMessage else None
-
-                    if await self.game_instance.check_win_all() and not self.game_instance.finished:
-                        self.game_instance.finished = True
-                        #Creates new message with the winner
-                        await self.game_instance.channel.send(f"{self.game_instance.player1.mention} won!") if self.game_instance.turnNo % 2 != 0 else await self.game_instance.channel.send(f"{self.game_instance.player2.mention} won!")
-                        await self.game_instance.cleanup()
-                    if self.game_instance.turnNo == 42:
-                        self.game_instance.finished = True
-                        await self.game_instance.channel.send("It's a tie!")
-                        await self.game_instance.cleanup()
 
 
             @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
@@ -246,7 +241,7 @@ class Games(commands.Cog):
 
                 self.lastInteractionTime = time()
                 self.game_instance.game.finished = False
-                Games.games[self.game_instance.parentInteraction.id] = self.game_instance
+    
 
                 await interaction.response.edit_message(view=self)
                 self.game_instance.emoji1 = Emoji("player1", await create_emoji(self, "player1", self.game_instance.player1.avatar))
@@ -254,6 +249,7 @@ class Games(commands.Cog):
 
                 display = self.game_instance.generateDisplay(self.game_instance.board)
                 self.game_instance.game_message:discord.Message = await self.game_instance.channel.send(display)
+                Games.games[self.game_instance.game_message.id] = self.game_instance
                 return await self.game_instance.reactControls()
                 
                 #else:
