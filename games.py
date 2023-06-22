@@ -17,7 +17,7 @@ class Emoji:
 class Games(commands.Cog):
     games = {}
     def __init__(self, bot):
-        self.bot = bot
+        self.bot:Bot = bot
         self.guild = self.bot.guilds[0]
 
 
@@ -35,15 +35,16 @@ class Games(commands.Cog):
             self.reactions = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣"]
             self.channel: discord.TextChannel = self.parentInteraction.channel
             self.board = [["⚫" for _ in range(7)] for _ in range(6)]
-            self.turnNo = 1
-            self.player1 = self.parentInteraction.user
-            self.player2 = None
+            self.turnNo = 0
+            self.player1: discord.User = self.parentInteraction.user
+            self.player2: discord.User = None
             self.game_message: discord.Message = None
             self.errorMessage: discord.Message = None
             self.emoji1:Emoji = None
             self.emoji2:Emoji = None
             self.lastInteractionTime = time()
             self.lastmove = None
+            self.finished = False
 
 
         def generateDisplay(self, board):
@@ -76,19 +77,26 @@ class Games(commands.Cog):
                 await self.parentInteraction.guild.delete_emoji(self.emoji1, reason = "Removed Connect4 emoji")
             if self.emoji2 is not None:
                 await self.parentInteraction.guild.delete_emoji(self.emoji2, reason = "Removed Connect4 emoji")
-            self.player1 = None
-            self.player2 = None
+            self.finished = True
             print("Cleaned up game")
-            return True
-        
-        async def timeout_cleanup(self, custom_id):
-            if custom_id in self.game.games:
-                game:Connect4Game = self.game.games[custom_id]
+            if self.parentInteraction.id in Games.games:
+                game:Connect4Game = Games.games[self.parentInteraction.id]
                 #print(time() - game.lastInteractionTime)
                 if time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
                     print("Removing emojis")
                     await game.cleanup()
-                    del self.game.games[custom_id]
+                    del Games.games[self.parentInteraction.id]
+                    return True
+        
+        async def timeout_cleanup(self, custom_id):
+            print(Games.games)
+            if custom_id in Games.games:
+                game:Connect4Game = Games.games[custom_id]
+                #print(time() - game.lastInteractionTime)
+                if time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
+                    print("Removing emojis")
+                    await game.cleanup()
+                    del Games.games[custom_id]
                     return True
             return False
 
@@ -177,21 +185,31 @@ class Games(commands.Cog):
                 @self.game_instance.game.bot.event
                 async def on_reaction_add(reaction, user):
                     print("Reaction added")
+                    if self.game_instance.finished or user.id == self.game_instance.game.bot.user.id:
+                        return
+                    
+                        # await self.game_instance.game_message.remove_reaction(reaction, user)
+                        # self.game_instance.errorMessage = await self.game_instance.parentInteraction.channel.send("Please wait before making a move!")
+                        # return await self.game_instance.errorMessage.delete(delay=2) if self.game_instance.errorMessage else None
+
                     if user.id not in [self.game_instance.player1.id, self.game_instance.player2.id, self.game_instance.game.bot.user.id]:
-                        await self.game_instance.game_message.remove_reaction(reaction, user)
+                        return await self.game_instance.game_message.remove_reaction(reaction, user)
+
+
                     if self.game_instance.reactValid(reaction, user, message = self.game_instance.game_message.id):
                         await self.game_instance.game_message.remove_reaction(reaction, user)
                         await self.game_instance.update_board(self.game_instance.readReaction(reaction), self.game_instance.board)
                         self.game_instance.lastInteractionTime = time()
-                    if await self.game_instance.check_win_all():
-                        #Creates new message with the winner
-                        await self.game_instance.channel.send(f"{self.game_instance.player1.mention} won!") if self.game_instance.turnNo % 2 == 0 else await self.message.send(f"{self.game_instance.player2.mention} won!")
-                        await self.game_instance.cleanup()
-                        return
-            
-            async def cleanup(self):
-                await self.game_instance.cleanup()
+                    else:
+                        await self.game_instance.game_message.remove_reaction(reaction, user)
+                        self.game_instance.errorMessage = await self.game_instance.channel.send(f"It is not your turn!")
+                        return await self.game_instance.errorMessage.delete(delay=2) if self.game_instance.errorMessage else None
 
+                    if await self.game_instance.check_win_all():
+                        self.game_instance.finished = True
+                        #Creates new message with the winner
+                        await self.game_instance.channel.send(f"{self.game_instance.player1.mention} won!") if self.game_instance.turnNo % 2 != 0 else await self.game_instance.channel.send(f"{self.game_instance.player2.mention} won!")
+                        await self.game_instance.cleanup()
             @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
             async def acceptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -221,9 +239,6 @@ class Games(commands.Cog):
                     emoji = await interaction.guild.create_custom_emoji(name=name, image=image_buffer.read())
                     return emoji.id
                 
-
-                #TODO delete custom emojis after game is over
-
                 #If user is already player 1 don't do anything
                 #if self.game_instance.player1 != interaction.user:
                 self.game_instance.player2 = interaction.user
@@ -232,7 +247,7 @@ class Games(commands.Cog):
 
                 self.lastInteractionTime = time()
                 self.game_instance.game.finished = False
-                self.game_instance.game.games[self.game_instance.parentInteraction.id] = self.game_instance
+                Games.games[self.game_instance.parentInteraction.id] = self.game_instance
 
                 await interaction.response.edit_message(view=self)
                 self.game_instance.emoji1 = Emoji("player1", await create_emoji(self, "player1", self.game_instance.player1.avatar))
