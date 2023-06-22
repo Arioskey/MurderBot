@@ -61,7 +61,7 @@ async def on_ready():
 
     #Tell Console we have logged in
     print(f"We have logged in as {bot.user}")
-    #Prepare bot
+    #Prepare bot 
 
     await bot.add_cog(CanvasCog(bot))
 
