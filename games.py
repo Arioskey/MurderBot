@@ -43,10 +43,15 @@ class Games(commands.Cog):
             self.emoji1:Emoji = None
             self.emoji2:Emoji = None
             self.lastInteractionTime = time()
+            self.lastmove = None
 
 
         def generateDisplay(self, board):
             pBoard = ''
+            if self.turnNo % 2 == 0:
+                pBoard += f"<@{self.player1.id}>'s turn\n"
+            else:
+                pBoard += f"<@{self.player2.id}>'s turn\n"
             for row in board:
                 for col in row:
                     pBoard += col
@@ -57,22 +62,22 @@ class Games(commands.Cog):
             for _, item in enumerate(self.reactions):
                 await self.game_message.add_reaction(item)
 
-        def reactValid(self, reaction, user):
+        def reactValid(self, reaction, user, message):
             if self.turnNo % 2 == 0:
-                return user == self.player1 and str(reaction.emoji) in self.reactions
+                return user == self.player1 and str(reaction.emoji) in self.reactions and message == self.game_message.id
             else:
-                return user == self.player2 and str(reaction.emoji) in self.reactions
+                return user == self.player2 and str(reaction.emoji) in self.reactions and message == self.game_message.id
 
         def readReaction(self, reaction):
             return self.reactions.index(str(reaction.emoji))
         
         async def cleanup(self):
-            await self.game_message.delete() #< --- Might not be needed (Save the game in chat history)
             if self.emoji1 is not None:
                 await self.parentInteraction.guild.delete_emoji(self.emoji1, reason = "Removed Connect4 emoji")
             if self.emoji2 is not None:
                 await self.parentInteraction.guild.delete_emoji(self.emoji2, reason = "Removed Connect4 emoji")
-            await self.parentInteraction.delete_original_response() #< --- Might not be needed (Save the game in chat history)
+            self.player1 = None
+            self.player2 = None
             print("Cleaned up game")
             return True
         
@@ -87,7 +92,6 @@ class Games(commands.Cog):
                     return True
             return False
 
-
         async def timeout_cleanup_task(self, custom_id):
             while True:
                 if await self.timeout_cleanup(custom_id):
@@ -96,9 +100,7 @@ class Games(commands.Cog):
             print("Task complete")
             return True
 
-            
-
-        async def UpdateBoard(self, reactionIndex, board):
+        async def update_board(self, reactionIndex, board):
             for i in range(5, -1, -1):
                 if board[i][reactionIndex] == '⚫':
                     #Player 1
@@ -112,6 +114,7 @@ class Games(commands.Cog):
                             board[i][reactionIndex] = f'<:{self.emoji2.name}:{self.emoji2.id}>'
                         else:
                             board[i][reactionIndex] = '🟡'
+                    self.lastmove = (i, reactionIndex)
                     self.turnNo += 1
                     break
                 elif i == 0:
@@ -119,7 +122,51 @@ class Games(commands.Cog):
                     break
             display = self.generateDisplay(board)
             await self.game_message.edit(content=display)
+            print("display updated")
             await self.errorMessage.delete(delay=3) if self.errorMessage else None
+
+        async def check_win_all(self):
+            #check horizontal that includes last move
+            print("Horizontal: ")
+            if await self.check_win(0, 1):
+                return True
+            #check vertical that includes last move
+            print("Vertical: ")
+            if await self.check_win(1, 0):
+                return True
+            #check diagonals that includes last move
+            print("Diagonal: ")
+            if await self.check_win(1, 1):
+                return True
+            #check other diagonal that includes last move
+            print("Other Diagonal: ")
+            if await self.check_win(1, -1):
+                return True
+            return False
+        
+        async def check_win(self, row_change, col_change):
+            if self.lastmove is None:
+                return False
+            row = self.lastmove[0]
+            col = self.lastmove[1]
+            count = 1
+            #check left
+            while col - col_change >= 0 and row - row_change >= 0 and self.board[row][col] == self.board[row - row_change][col - col_change]:
+                count += 1
+                col -= col_change
+                row -= row_change
+            #check right
+            row = self.lastmove[0]
+            col = self.lastmove[1]
+            while col + col_change < 7 and row + row_change < 6 and self.board[row][col] == self.board[row + row_change][col + col_change]:
+                count += 1
+                col += col_change
+                row += row_change
+            if count >= 4:
+                print(f"ROW ACHIEVED - {count} in a row\n")
+                return True
+            print(f"ROW NOT ACHIEVED - {count} in a row\n")
+            return False
 
 
         class Connect4View(discord.ui.View):
@@ -129,12 +176,18 @@ class Games(commands.Cog):
                 
                 @self.game_instance.game.bot.event
                 async def on_reaction_add(reaction, user):
+                    print("Reaction added")
                     if user.id not in [self.game_instance.player1.id, self.game_instance.player2.id, self.game_instance.game.bot.user.id]:
                         await self.game_instance.game_message.remove_reaction(reaction, user)
-                    if self.game_instance.reactValid(reaction, user):
+                    if self.game_instance.reactValid(reaction, user, message = self.game_instance.game_message.id):
                         await self.game_instance.game_message.remove_reaction(reaction, user)
-                        await self.game_instance.UpdateBoard(self.game_instance.readReaction(reaction), self.game_instance.board)
+                        await self.game_instance.update_board(self.game_instance.readReaction(reaction), self.game_instance.board)
                         self.game_instance.lastInteractionTime = time()
+                    if await self.game_instance.check_win_all():
+                        #Creates new message with the winner
+                        await self.game_instance.channel.send(f"{self.game_instance.player1.mention} won!") if self.game_instance.turnNo % 2 == 0 else await self.message.send(f"{self.game_instance.player2.mention} won!")
+                        await self.game_instance.cleanup()
+                        return
             
             async def cleanup(self):
                 await self.game_instance.cleanup()
@@ -171,8 +224,8 @@ class Games(commands.Cog):
 
                 #TODO delete custom emojis after game is over
 
-
-
+                #If user is already player 1 don't do anything
+                #if self.game_instance.player1 != interaction.user:
                 self.game_instance.player2 = interaction.user
                 for child in self.children:
                     child.disabled = True
@@ -189,6 +242,9 @@ class Games(commands.Cog):
                 self.game_instance.game_message:discord.Message = await self.game_instance.channel.send(display)
                 return await self.game_instance.reactControls()
                 
+                #else:
+                    #await interaction.response.send_message("You are already player 1!", ephemeral=True)
+  
 
             @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
             async def declineButton(self, interaction: discord.Interaction, button: discord.ui.Button):
