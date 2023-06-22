@@ -75,8 +75,8 @@ class CanvasCog(commands.Cog):
         #Close the file
         json_file.close()
         #Start loops to check for announcements and assignments
-        self.check_announcements.start()
-        self.check_assignments.start()
+        # self.check_announcements.start()
+        # self.check_assignments.start()
     
     #Method to check if user is a discord user
     def checkCanvasUser(self, interaction:discord.Interaction):
@@ -462,7 +462,7 @@ class CanvasCog(commands.Cog):
                 await channel.send(f"You have no upcoming assignments! (for at least {days} days)")
             
     @app_commands.command(description="Gathers upcoming assignments")
-    async def assignments(self, interaction:discord.Interaction, course: str = None, days: int = GLOBAL_DAYS, locked: str = "False"):
+    async def assignments(self, interaction:discord.Interaction, course: str = None, days: int = GLOBAL_DAYS, locked: bool = True):
         # Check if the Canvas User instance exists
         await interaction.response.defer(ephemeral=True, thinking=True)
         if not (canvas := self.checkCanvasUser(interaction)):
@@ -485,13 +485,13 @@ class CanvasCog(commands.Cog):
         if course == "all":
             # Set course to None
             course = None
-        # Change from bool to string
-        if locked == "True":
-            locked = True
-        elif locked == "False": 
-            locked = False
-        else:
-            return await interaction.edit_original_response(content="Please specify a valid option for the locked parameter")
+        # # Change from bool to string
+        # if locked == "True":
+        #     locked = True
+        # elif locked == "False": 
+        #     locked = False
+        # else:
+        #     return await interaction.edit_original_response(content="Please specify a valid option for the locked parameter")
         #Check for valid days
         
         if days < 1:

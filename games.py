@@ -1,15 +1,18 @@
 import discord
-from discord import app_commands
+from discord import app_commands, Embed
 from discord.ext import commands, tasks
+from discord.utils import format_dt
 from discord.ext.commands import Bot
 import asyncio
-from time import time
+import time
+import random
+from datetime import datetime
 
 from requests import get
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageOps
 
-class Emoji:
+class Emoji: #Change this later to use the official discord Emoji class
     def __init__(self, name, id):
         self.name = name
         self.id = id
@@ -38,7 +41,7 @@ class Games(commands.Cog):
         if game_instance.reactValid(reaction, user, message = game_instance.game_message.id):
             await game_instance.game_message.remove_reaction(reaction, user)
             await game_instance.update_board(game_instance.readReaction(reaction), game_instance.board)
-            game_instance.lastInteractionTime = time()
+            game_instance.lastInteractionTime = time.time()
         else:
             await game_instance.game_message.remove_reaction(reaction, user)
             game_instance.errorMessage = await game_instance.channel.send(f"It is not your turn!")
@@ -69,22 +72,38 @@ class Games(commands.Cog):
             self.errorMessage: discord.Message = None
             self.emoji1:Emoji = None
             self.emoji2:Emoji = None
-            self.lastInteractionTime = time()
+            self.lastInteractionTime = time.time()
             self.lastmove = None
             self.finished = False
 
 
-        def generateDisplay(self, board):
-            pBoard = ''
-            if self.turnNo % 2 == 0:
-                pBoard += f"<@{self.player1.id}>'s turn\n"
-            else:
-                pBoard += f"<@{self.player2.id}>'s turn\n"
+        def generateDisplay(self, board) -> Embed:
+            randcolor = discord.Color(random.randint(0x000000, 0xFFFFFF))
+            embed = Embed(title="Connect 4", color=randcolor)
+            embed.add_field(name="Players", value=f"{self.player1.mention} vs {self.player2.mention}")
+            progress = "Game in progress" if not self.finished else "Game finished"
+            embed.add_field(name="Status", value=progress, inline=False)
+
+            if not self.finished:
+                if self.turnNo % 2 == 0:
+                    embed.add_field(name="Turn", value=f"It's <@{self.player1.id}>'s turn", inline=False)
+                else:
+                    embed.add_field(name="Turn", value=f"It's <@{self.player2.id}>'s turn", inline=False)
+
             for row in board:
+                row_str = ""
                 for col in row:
-                    pBoard += col
-                pBoard += '\n'
-            return pBoard
+                    row_str += col + "   "
+                embed.add_field(name="\u200b", value=row_str, inline=False)
+            current_time = datetime.now()  # Get current date and time
+            embed.add_field(name="\u200b", value=f"Last Updated: <t:{int(current_time.timestamp())}:F>")
+            if self.finished:
+                # duration = datetime.now() - self.game_message.created_at.replace(tzinfo=None)  # Calculate the game duration
+                # embed.add_field(name="Game Duration", value=f"<t:{int(duration.total_seconds())}:R>", inline=False)
+                pass
+
+            return embed
+
 
         async def reactControls(self):
             for _, item in enumerate(self.reactions):
@@ -100,19 +119,21 @@ class Games(commands.Cog):
             return self.reactions.index(str(reaction.emoji))
         
         async def cleanup(self):
+            embed = self.generateDisplay(self.board)
+            await self.game_message.edit(embed=embed)
+            await asyncio.sleep(2)
             if self.emoji1 is not None:
                 await self.parentInteraction.guild.delete_emoji(self.emoji1, reason = "Removed Connect4 emoji")
             if self.emoji2 is not None:
                 await self.parentInteraction.guild.delete_emoji(self.emoji2, reason = "Removed Connect4 emoji")
-            self.finished = True
+            
             print("Cleaned up game")
-            if self.parentInteraction.id in Games.games:
-                game:Connect4Game = Games.games[self.parentInteraction.id]
+            if self.game_message.id in Games.games:
+                game:Connect4Game = Games.games[self.game_message.id]
                 #print(time() - game.lastInteractionTime)
-                if time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
+                if time.time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
                     print("Removing emojis")
-                    await game.cleanup()
-                    del Games.games[self.parentInteraction.id]
+                    del Games.games[self.game_message.id]
                     return True
         
         async def timeout_cleanup(self, custom_id):
@@ -120,7 +141,7 @@ class Games(commands.Cog):
             if custom_id in Games.games:
                 game:Connect4Game = Games.games[custom_id]
                 #print(time() - game.lastInteractionTime)
-                if time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
+                if time.time() - game.lastInteractionTime > 300: # OR game has finished (set a flag)
                     print("Removing emojis")
                     await game.cleanup()
                     del Games.games[custom_id]
@@ -138,7 +159,7 @@ class Games(commands.Cog):
         async def update_board(self, reactionIndex, board):
             for i in range(5, -1, -1):
                 if board[i][reactionIndex] == '⚫':
-                    #Player 1
+                    # Player 1
                     if self.turnNo % 2 == 0:
                         if self.emoji1 is not None:
                             board[i][reactionIndex] = f'<:{self.emoji1.name}:{self.emoji1.id}>'
@@ -155,9 +176,11 @@ class Games(commands.Cog):
                 elif i == 0:
                     self.errorMessage = await self.channel.send("Column is full! Do another move")
                     break
-            display = self.generateDisplay(board)
-            await self.game_message.edit(content=display)
+
+            embed = self.generateDisplay(board)
+            await self.game_message.edit(embed=embed)
             await self.errorMessage.delete(delay=3) if self.errorMessage else None
+
 
         async def check_win_all(self):
             #check horizontal that includes last move
@@ -239,7 +262,7 @@ class Games(commands.Cog):
                 for child in self.children:
                     child.disabled = True
 
-                self.lastInteractionTime = time()
+                self.lastInteractionTime = time.time()
                 self.game_instance.game.finished = False
     
 
@@ -248,7 +271,7 @@ class Games(commands.Cog):
                 self.game_instance.emoji2 = Emoji("player2", await create_emoji(self, "player2", self.game_instance.player2.avatar))
 
                 display = self.game_instance.generateDisplay(self.game_instance.board)
-                self.game_instance.game_message:discord.Message = await self.game_instance.channel.send(display)
+                self.game_instance.game_message: discord.Message = await self.game_instance.channel.send(embed=display)
                 Games.games[self.game_instance.game_message.id] = self.game_instance
                 return await self.game_instance.reactControls()
                 
@@ -284,6 +307,7 @@ class Games(commands.Cog):
         # Sends message with buttons
         await interaction.channel.send("Click the button to accept or decline", view=connect4_game.Connect4View(connect4_game))
         # Schedule timeout cleanup after 10 seconds
+        #this no longer works as we no do not use interaciton id anymore
         asyncio.create_task(connect4_game.timeout_cleanup_task(interaction.id))
         
 

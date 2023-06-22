@@ -493,6 +493,7 @@ async def delete_messages(interaction:discord.Interaction, member:discord.Member
     extra = 0
     if interaction.user.id == member.id:
         extra = 1
+    #flatten no longer works
     for msg in await channel.history().flatten():
         if msg.author.id == member.id:
             msgs.append(msg)
