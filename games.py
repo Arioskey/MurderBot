@@ -130,24 +130,19 @@ class Games(commands.Cog):
                     break
             display = self.generateDisplay(board)
             await self.game_message.edit(content=display)
-            print("display updated")
             await self.errorMessage.delete(delay=3) if self.errorMessage else None
 
         async def check_win_all(self):
             #check horizontal that includes last move
-            print("Horizontal: ")
             if await self.check_win(0, 1):
                 return True
             #check vertical that includes last move
-            print("Vertical: ")
             if await self.check_win(1, 0):
                 return True
             #check diagonals that includes last move
-            print("Diagonal: ")
             if await self.check_win(1, 1):
                 return True
             #check other diagonal that includes last move
-            print("Other Diagonal: ")
             if await self.check_win(1, -1):
                 return True
             return False
@@ -171,9 +166,7 @@ class Games(commands.Cog):
                 col += col_change
                 row += row_change
             if count >= 4:
-                print(f"ROW ACHIEVED - {count} in a row\n")
                 return True
-            print(f"ROW NOT ACHIEVED - {count} in a row\n")
             return False
 
 
@@ -185,6 +178,7 @@ class Games(commands.Cog):
                 @self.game_instance.game.bot.event
                 async def on_reaction_add(reaction, user):
                     print("Reaction added")
+                    print(self.game_instance.game_message.id)
                     if self.game_instance.finished or user.id == self.game_instance.game.bot.user.id:
                         return
                     
@@ -195,7 +189,6 @@ class Games(commands.Cog):
                     if user.id not in [self.game_instance.player1.id, self.game_instance.player2.id, self.game_instance.game.bot.user.id]:
                         return await self.game_instance.game_message.remove_reaction(reaction, user)
 
-
                     if self.game_instance.reactValid(reaction, user, message = self.game_instance.game_message.id):
                         await self.game_instance.game_message.remove_reaction(reaction, user)
                         await self.game_instance.update_board(self.game_instance.readReaction(reaction), self.game_instance.board)
@@ -205,11 +198,17 @@ class Games(commands.Cog):
                         self.game_instance.errorMessage = await self.game_instance.channel.send(f"It is not your turn!")
                         return await self.game_instance.errorMessage.delete(delay=2) if self.game_instance.errorMessage else None
 
-                    if await self.game_instance.check_win_all():
+                    if await self.game_instance.check_win_all() and not self.game_instance.finished:
                         self.game_instance.finished = True
                         #Creates new message with the winner
                         await self.game_instance.channel.send(f"{self.game_instance.player1.mention} won!") if self.game_instance.turnNo % 2 != 0 else await self.game_instance.channel.send(f"{self.game_instance.player2.mention} won!")
                         await self.game_instance.cleanup()
+                    if self.game_instance.turnNo == 42:
+                        self.game_instance.finished = True
+                        await self.game_instance.channel.send("It's a tie!")
+                        await self.game_instance.cleanup()
+
+
             @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
             async def acceptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
 
