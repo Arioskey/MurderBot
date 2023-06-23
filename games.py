@@ -38,7 +38,7 @@ class Games(commands.Cog):
         if user.id not in [game_instance.player1.id, game_instance.player2.id, self.bot.user.id]:
             return await game_instance.game_message.remove_reaction(reaction, user)
 
-        if game_instance.reactValid(reaction, user, message = game_instance.game_message.id):
+        if game_instance.reactValid(reaction, user, message = reaction.message.id):
             await game_instance.game_message.remove_reaction(reaction, user)
             await game_instance.update_board(game_instance.readReaction(reaction), game_instance.board)
             game_instance.lastInteractionTime = time.time()
@@ -76,7 +76,6 @@ class Games(commands.Cog):
             self.lastmove = None
             self.finished = False
 
-
         def generateDisplay(self, board) -> Embed:
             randcolor = discord.Color(random.randint(0x000000, 0xFFFFFF))
             embed = Embed(title="Connect 4", color=randcolor)
@@ -93,7 +92,7 @@ class Games(commands.Cog):
             for row in board:
                 row_str = ""
                 for col in row:
-                    row_str += col + "   "
+                    row_str += col + "⠀⠀"
                 embed.add_field(name="\u200b", value=row_str, inline=False)
             current_time = datetime.now()  # Get current date and time
             embed.add_field(name="\u200b", value=f"Last Updated: <t:{int(current_time.timestamp())}:F>")
@@ -120,7 +119,8 @@ class Games(commands.Cog):
         
         async def cleanup(self):
             embed = self.generateDisplay(self.board)
-            await self.game_message.edit(embed=embed)
+            await self.game_message.edit(embed=embed, view = None)
+            #await self.ResignButton.clearResignButton(self)
             await asyncio.sleep(2)
             if self.emoji1 is not None:
                 await self.parentInteraction.guild.delete_emoji(self.emoji1, reason = "Removed Connect4 emoji")
@@ -156,7 +156,7 @@ class Games(commands.Cog):
             print("Task complete")
             return True
 
-        async def update_board(self, reactionIndex, board):
+        async def update_board(self, reactionIndex, board):   
             for i in range(5, -1, -1):
                 if board[i][reactionIndex] == '⚫':
                     # Player 1
@@ -219,6 +219,25 @@ class Games(commands.Cog):
                 return True
             return False
 
+        class ResignButton(discord.ui.View):
+            def __init__(self, game_instance):
+                super().__init__(timeout=None)
+                self.game_instance:Connect4Game = game_instance
+
+            @discord.ui.button(label="Resign", style=discord.ButtonStyle.red)
+            async def resignButton(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user == self.game_instance.player1 or interaction.user == self.game_instance.player2:
+                    if interaction.user == self.game_instance.player1:
+                        otherplayer = self.game_instance.player2
+                    else:
+                        otherplayer = self.game_instance.player1
+                    await self.game_instance.channel.send(f"{otherplayer.mention} won by resignation!")
+                    self.game_instance.finished = True
+                    await interaction.response.send_message("You have resigned.", ephemeral=True)
+                    await self.game_instance.cleanup()
+                else:
+                    await interaction.response.send_message("You are not playing the game!", ephemeral=True)
+
 
         class Connect4View(discord.ui.View):
             def __init__(self, game_instance):
@@ -271,10 +290,9 @@ class Games(commands.Cog):
                 self.game_instance.emoji2 = Emoji("player2", await create_emoji(self, "player2", self.game_instance.player2.avatar))
 
                 display = self.game_instance.generateDisplay(self.game_instance.board)
-                self.game_instance.game_message: discord.Message = await self.game_instance.channel.send(embed=display)
+                self.game_instance.game_message: discord.Message = await self.game_instance.channel.send(embed=display, view = self.game_instance.ResignButton(self.game_instance))
                 Games.games[self.game_instance.game_message.id] = self.game_instance
                 return await self.game_instance.reactControls()
-                
                 #else:
                     #await interaction.response.send_message("You are already player 1!", ephemeral=True)
   
@@ -311,6 +329,7 @@ class Games(commands.Cog):
         asyncio.create_task(connect4_game.timeout_cleanup_task(interaction.id))
         
 
+                
 
 
 
