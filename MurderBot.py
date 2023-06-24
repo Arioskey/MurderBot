@@ -557,6 +557,19 @@ async def create_emoji(interaction:discord.Interaction, name:str, link:str=None,
     await interaction.guild.create_custom_emoji(name=name, image=image_buffer.read())
     return await interaction.edit_original_response(content=f"Created emoji {name}")
 
+@bot.tree.command(description="Delete a custom emoji")
+async def delete_emoji(interaction:discord.Interaction, name:str):
+    emojis = [emoji for emoji in guild.emojis if name.lower() in emoji.name.lower()]
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    if not emojis:
+        await interaction.edit_original_response(content=f"No emojis found containing the substring '{name}'.")
+    else:
+        deleted_emojis = []
+        for emoji in emojis:
+            await emoji.delete()
+            deleted_emojis.append(emoji.name)
+    return await interaction.edit_original_response(content=f"Deleted emojis containing the substring '{name}': {' '.join(deleted_emojis)}")
+
 # @bot.tree.command(description="Checks dm's of a user")
 # async def check_dms(interaction:discord.Interaction, member:discord.Member):
 #     if interaction.user.id != 238063640601821185:
