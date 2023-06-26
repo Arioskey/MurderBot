@@ -18,6 +18,8 @@ class Games(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.guild = self.bot.guilds[0]
+        self.allcards = []
+        self.customvalues = {}
 
     #Shared commands for all games
     async def reactControls(self):
@@ -34,22 +36,19 @@ class Games(commands.Cog):
             return user == self.player2 and str(reaction.emoji) in self.reactions and message == self.game_message.id
     
     def loadAllCards(self):
-        return os.listdir("playingcards/")
+        self.allcards = os.listdir("playingcards/")
     
-    def removeJokers(self, allcards):
-        allcards.remove("cardJokerBlack.png")
-        allcards.remove("cardJokerRed.png")
-        return allcards
+    def removeJokers(self):
+        self.allcards.remove("cardBlackJoker.png")
+        self.allcards.remove("cardRedJoker.png")
     
     def loadRandomCard(self, cardnumber, includeJokers):
-        allcards = self.loadAllCards()
         if not includeJokers:
-            allcards = self.removeJokers(allcards)
+            self.removeJokers()
         cardimages = [None]*cardnumber
         for i in range(cardnumber):
-            selectedCard = random.randint(0, len(allcards) - 1)
-            cardimages[i] = allcards.pop(selectedCard)
-            print (cardimages[i])
+            selectedCard = random.randint(0, len(self.allcards) - 1)
+            cardimages[i] = self.allcards.pop(selectedCard)
         return cardimages
 
     def developImage(self, cardimage):
@@ -67,3 +66,24 @@ class Games(commands.Cog):
             addcard = Image.open("playingcards/"+ cards[i]).convert("RGBA")
             new_image.paste(addcard,(cardsize[0]*i,0))   
         return new_image
+    
+    def totalCards(self, cards):
+        total = 0
+        for card in cards:
+            if card in self.customvalues:
+                total += self.customvalues[card]
+            elif card[-5] == "A":
+                total += 11
+            elif card[-5] == "r":
+                total += 0
+            elif card[-5] == "K" or card[-5] == "Q" or card[-5] == "J" or card[-5] == "0":
+                total += 10
+            else:
+                total += int(card[-5])
+        return total
+    
+    def assignCardValue(self, card, value):
+        if card in os.listdir("playingcards/"):
+            self.customvalues[card] = value
+        else:
+            print("Card not valid")
