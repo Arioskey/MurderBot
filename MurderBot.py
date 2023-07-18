@@ -64,7 +64,7 @@ async def on_ready():
     print(f"We have logged in as {bot.user}")
     #Prepare bot 
 
-    #await bot.add_cog(CanvasCog(bot))
+    await bot.add_cog(CanvasCog(bot))
 
     await bot.add_cog(Nick(bot, lists))
     await bot.add_cog(Voice(bot))

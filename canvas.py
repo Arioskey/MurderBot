@@ -52,7 +52,10 @@ class CanvasUser(Canvas):
             #Add the course id to the list
             course_ids.append(course.course_id)
             #Add the grades to the grade string
-            self.grades_string = f"{self.grades_string}+ {super().get_course(course.course_id).name}: {course.grades.get('final_grade')} \n"
+            try:
+                self.grades_string = f"{self.grades_string}+ {super().get_course(course.course_id).name}: {course.grades.get('final_grade')} \n"
+            except AttributeError:
+                pass
 
 def RandomColor(): #generates a random discord colour that will be used in the embeds
   randcolor = discord.Color(random.randint(0x000000, 0xFFFFFF))
@@ -469,8 +472,6 @@ class CanvasCog(commands.Cog):
             return await interaction.edit_original_response(content="User's not registered!")
 
         # Check if the days is the default amount
-        # Might need to fix this
-        locked = locked.capitalize()
         if days == GLOBAL_DAYS:
             try:
                 days = int(course)
@@ -485,15 +486,8 @@ class CanvasCog(commands.Cog):
         if course == "all":
             # Set course to None
             course = None
-        # # Change from bool to string
-        # if locked == "True":
-        #     locked = True
-        # elif locked == "False": 
-        #     locked = False
-        # else:
-        #     return await interaction.edit_original_response(content="Please specify a valid option for the locked parameter")
-        #Check for valid days
         
+        # Check if the days is valid
         if days < 1:
             return await interaction.edit_original_response(content="Please enter a valid amount of days")
         await interaction.edit_original_response(content="Loading assignments")
