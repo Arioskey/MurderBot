@@ -23,6 +23,7 @@ from banned import Banned
 from canvas import CanvasCog
 from connect4 import Connect4
 from cards import Cards
+from scum import Scum
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from typing import Optional, Union
 from datetime import datetime
@@ -71,7 +72,9 @@ async def on_ready():
     await bot.add_cog(Software(bot))
     await bot.add_cog(Cards(bot))
     await bot.add_cog(Connect4(bot))
+    await bot.add_cog(Scum(bot))
     await bot.wait_until_ready()
+
 
 
     
