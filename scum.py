@@ -26,7 +26,7 @@ class Scum(commands.Cog):
             self.game = game
             self.allcards = []
             self.customvalues = {}
-            self.users = ["user"]
+            self.users:list = ["user"]
             self.game_instance = None
 
         async def displayJoin(self, userlist):
@@ -38,13 +38,13 @@ class Scum(commands.Cog):
         class ScumStart(discord.ui.View):
             def __init__(self, game_instance):
                 super().__init__(timeout=None)  
-                self.game_instance:Scum = game_instance
+                self.game_instance:ScumGame = game_instance
                 
                 
 
             @discord.ui.button(label="Join", style=discord.ButtonStyle.success)
             async def joinButton(self, interaction: discord.Interaction, button: discord.ui.Button):
-
+                print(self.game_instance.users)
                 if str(interaction.user.mention) in self.game_instance.users:
                     await interaction.response.send_message("You are already in the game!", ephemeral=True)
                 else:
@@ -75,7 +75,6 @@ class Scum(commands.Cog):
     async def scum(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         scum_game:ScumGame = ScumGame(self)
-        scum_game.users = ""
         embedVar = await scum_game.displayJoin(scum_game.users) 
         await interaction.channel.send(embed = embedVar, view=scum_game.ScumStart(scum_game))
         await interaction.edit_original_response(content="Game created!")
