@@ -8,6 +8,7 @@ import asyncio
 import time
 import random
 import os
+from math import floor
 from datetime import datetime
 
 from requests import get
@@ -20,6 +21,9 @@ class Games(commands.Cog):
         self.guild = self.bot.guilds[0]
         self.allcards = []
         self.customvalues = {}
+        self.selectorpos = 0
+        self.max_cols = 8
+        self.cardsize = []
 
     #Shared commands for all games
     async def reactControls(self):
@@ -36,7 +40,7 @@ class Games(commands.Cog):
             return user == self.player2 and str(reaction.emoji) in self.reactions and message == self.game_message.id
     
     def loadAllCards(self):
-        self.allcards = os.listdir("playingcards/")
+        self.allcards = os.listdir("playingcards")
     
     def removeJokers(self):
         self.allcards.remove("cardBlackJoker.png")
@@ -57,14 +61,13 @@ class Games(commands.Cog):
         image_buffer.seek(0)
         return image_buffer
     
-    #TODO: Make merge look loads better with high numbers of cards
     def mergeImages(self, cards):
         startcard = Image.open("playingcards/"+ cards[0]).convert("RGBA")
-        cardsize = startcard.size
-        new_image = Image.new('RGBA',(len(cards)*cardsize[0], cardsize[1]), (250,250,250))
+        self.cardsize = startcard.size
+        new_image = Image.new('RGBA',((self.max_cols)*self.cardsize[0], self.cardsize[1]*(floor((len(cards)-1)/self.max_cols)+1)), (0,0,0,0))
         for i, card in enumerate(cards):
-            addcard = Image.open("playingcards/"+ cards[i]).convert("RGBA")
-            new_image.paste(addcard,(cardsize[0]*i,0))   
+            addcard = Image.open("playingcards/" + cards[i]).convert("RGBA")
+            new_image.paste(addcard, [self.cardsize[0]*(i%self.max_cols), self.cardsize[1]*floor((i/self.max_cols))])
         return new_image
     
     def totalCards(self, cards):
@@ -82,8 +85,50 @@ class Games(commands.Cog):
                 total += int(card[-5])
         return total
     
+    def hierachy(self, card):
+        total = 0
+
     def assignCardValue(self, card, value):
         if card in os.listdir("playingcards/"):
             self.customvalues[card] = value
         else:
             print("Card not valid")
+
+    async def generateUserList(self, userlist):
+        users = "Host: "
+        for user in userlist:
+            users += user + "\n"
+        return users
+    
+    def dealAllCards(self, players):
+        hands = {}
+        handsize = floor(54/len(players))
+        handExtra = 54%len(players)
+        for player in players:
+            if handExtra > 0:
+                hands[player] = self.loadRandomCard(handsize+1, True)
+                handExtra -= 1
+            else:
+                hands[player] = self.loadRandomCard(handsize, True)
+        return hands
+        
+    def sortCards(self, hand):
+        return 0
+    
+
+    def selectorDisplay(self, printimage):
+        selector = Image.open("images/selector.png").convert("RGBA")
+        mainsize = printimage.size
+        selector_image = Image.new('RGBA', (mainsize[0], mainsize[1]), (0,0,0,0))
+        selector_image.paste(selector, [self.cardsize[0]*(self.selectorpos%self.max_cols), self.cardsize[1]*floor((self.selectorpos/self.max_cols))])
+        printimage.paste(selector_image, [0,0], selector_image)
+        return printimage
+
+    def moveSelector(self, hand, direction, length):
+        if (self.selectorpos + direction) >= 0 and (self.selectorpos + direction) < length:
+            self.selectorpos = self.selectorpos + direction
+            print(f'Moving selector to {self.selectorpos}')
+            printimage = self.selectorDisplay(hand)
+        else:
+            printimage = hand
+        return printimage

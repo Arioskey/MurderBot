@@ -100,6 +100,3 @@ class Scum(commands.Cog):
         embedVar = await scum_game.displayJoin(userlist) 
         await interaction.channel.send(embed = embedVar, view=scum_game.ScumStart(scum_game))
         await interaction.edit_original_response(content="Game created!")
-
-        
-        
