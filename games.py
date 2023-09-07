@@ -10,6 +10,7 @@ import random
 import os
 from math import floor
 from datetime import datetime
+import json
 
 from requests import get
 from io import BytesIO
@@ -21,7 +22,6 @@ class Games(commands.Cog):
         self.guild = self.bot.guilds[0]
         self.allcards = []
         self.customvalues = {}
-        self.selectorpos = 0
         self.max_cols = 8
         self.cardsize = []
 
@@ -62,6 +62,8 @@ class Games(commands.Cog):
         return image_buffer
     
     def mergeImages(self, cards):
+        if len(cards) == 0:
+            return None
         startcard = Image.open("playingcards/"+ cards[0]).convert("RGBA")
         self.cardsize = startcard.size
         new_image = Image.new('RGBA',((self.max_cols)*self.cardsize[0], self.cardsize[1]*(floor((len(cards)-1)/self.max_cols)+1)), (0,0,0,0))
@@ -70,6 +72,11 @@ class Games(commands.Cog):
             new_image.paste(addcard, [self.cardsize[0]*(i%self.max_cols), self.cardsize[1]*floor((i/self.max_cols))])
         return new_image
     
+    async def loadCardValues(self):
+        data = open('cards.json')
+        return (json.load(data))
+
+
     def totalCards(self, cards):
         total = 0
         for card in cards:
@@ -85,20 +92,12 @@ class Games(commands.Cog):
                 total += int(card[-5])
         return total
     
-    def hierachy(self, card):
-        total = 0
 
     def assignCardValue(self, card, value):
         if card in os.listdir("playingcards/"):
             self.customvalues[card] = value
         else:
             print("Card not valid")
-
-    async def generateUserList(self, userlist):
-        users = "Host: "
-        for user in userlist:
-            users += user + "\n"
-        return users
     
     def dealAllCards(self, players):
         hands = {}
@@ -112,23 +111,65 @@ class Games(commands.Cog):
                 hands[player] = self.loadRandomCard(handsize, True)
         return hands
         
-    def sortCards(self, hand):
-        return 0
+    async def sortCards(self, hand):
+        values = await self.loadCardValues()
+        hand.sort(key=lambda x: values[x])
+        return hand
     
 
-    def selectorDisplay(self, printimage):
+    def selectorDisplay(self, printimage, selecpos):
         selector = Image.open("images/selector.png").convert("RGBA")
         mainsize = printimage.size
         selector_image = Image.new('RGBA', (mainsize[0], mainsize[1]), (0,0,0,0))
-        selector_image.paste(selector, [self.cardsize[0]*(self.selectorpos%self.max_cols), self.cardsize[1]*floor((self.selectorpos/self.max_cols))])
+        selector_image.paste(selector, [self.cardsize[0]*(selecpos%self.max_cols), self.cardsize[1]*floor((selecpos/self.max_cols))])
         printimage.paste(selector_image, [0,0], selector_image)
         return printimage
 
-    def moveSelector(self, hand, direction, length):
-        if (self.selectorpos + direction) >= 0 and (self.selectorpos + direction) < length:
-            self.selectorpos = self.selectorpos + direction
-            print(f'Moving selector to {self.selectorpos}')
-            printimage = self.selectorDisplay(hand)
-        else:
-            printimage = hand
+    def moveSelector(self, hand, direction, user):
+        length = len(self.hands[user])
+        if length == 0:
+            return None
+        
+        self.selectorpos[self.users.index(user)] = self.selectorpos[self.users.index(user)] + direction
+        #Wrap around
+        if (self.selectorpos[self.users.index(user)] < 0 or (self.selectorpos[self.users.index(user)] + direction) > length):
+            self.selectorpos[self.users.index(user)] = self.selectorpos[self.users.index(user)] - (direction*length)
+
+        printimage = self.selectorDisplay(hand, self.selectorpos[self.users.index(user)])
         return printimage
+    
+    def hand_image(self, user, direction):
+        handimage = self.mergeImages(self.hands[user])
+        select_image = self.moveSelector(handimage, direction, user)
+        if select_image == None:
+            return None
+        else:
+            return (self.developImage(select_image))
+    
+    def card_image(self, cards):
+        cardimage = self.mergeImages(cards)
+        return (self.developImage(cardimage))
+    
+    async def generateUserList(self, userlist):
+        users = "Host: "
+        for user in userlist:
+            users += user.mention + "\n"
+        return users
+
+    async def displayusers(self, userlist):
+        userlist = await self.generateUserList(userlist)
+        embedVar = discord.Embed(title="Scum", color=0x00ff00)
+        embedVar.add_field(name="Click the button to join", value=f"{userlist}", inline=False)
+        embedVar.set_image(url= "attachment://image.png")
+        return embedVar
+    
+    async def generateTurnList(self, userlist, currentPlayer):
+        playerPos = userlist.index(currentPlayer)
+        for user in userlist:
+            users = userlist[playerPos].mention + "\n"
+            playerPos = (playerPos + 1) % len(userlist)
+        return users
+    
+    async def findNextPlayer(self, userlist, currentPlayer):
+        nextPlayer = userlist[(userlist.index(currentPlayer) + 1) % len(userlist)]
+        return nextPlayer
