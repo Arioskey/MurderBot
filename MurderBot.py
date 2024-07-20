@@ -1,38 +1,39 @@
-version = "2.0"
-#Imports
-
-import asyncio
-
-import discord
-import os
-import datetime
-import time
-import traceback
-
-from discord import FFmpegPCMAudio, app_commands
-from argparse import ArgumentError
-from discord.ext import commands, tasks
-from discord.ext.commands import Bot
-from discord.ui import Button, View
-from nick import Nick
-from voice import Voice
-from software import Software
-from random import randint
-from words import allPhrases
-from banned import Banned
-from canvas import CanvasCog
-from connect4 import Connect4
-from cards import Cards
-from scum import Scum
-from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
-from typing import Optional, Union
-from datetime import datetime
-from requests import get
-from io import BytesIO
+from discord.ext import commands
+from enum import Enum
 from PIL import Image, ImageDraw, ImageOps
+from io import BytesIO
+from requests import get
+from datetime import datetime
+from typing import Optional, Union
+from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
+from scum import Scum
+from cards import Cards
+from connect4 import Connect4
+from canvas import CanvasCog
+from banned import Banned
+from words import allPhrases
+from random import randint
+from software import Software
+from voice import Voice
+from nick import Nick
+from discord.ui import Button, View
+from discord.ext.commands import Bot
+from discord.ext import commands, tasks
+from argparse import ArgumentError
+from discord import FFmpegPCMAudio, app_commands
+import traceback
+import time
+import datetime
+import os
+import discord
+import asyncio
+import re
+version = "2.0"
+# Imports
+
 
 # Variables
-token = open(".git/token.txt","r").read()
+token = open(".git/token.txt", "r").read()
 target = 694382869367226368
 options = allPhrases()
 global permanent_file, alt_file
@@ -41,56 +42,49 @@ alt_file = "Memory/alt.txt"
 players = {}
 jumpscareBool = True
 
-#Bot setup
-bot = commands.Bot(command_prefix='.', test_guilds= [852379093776465940], intents=discord.Intents.all(), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
+# Bot setup
+bot = commands.Bot(command_prefix='.', test_guilds=[852379093776465940, 1263346277744246895], intents=discord.Intents.all(
+), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
 
 
-
-#On bot start up
+# On bot start up
 @bot.event
 async def on_ready():
-    #Globalise all variables
+    # Globalise all variables
     global guild, lists, options, out_of_context, perm_nicknames, phrases, target, jumpscareBool
-    #Initliase variables and lists
+    # Initliase variables and lists
     alt_nicknames = []
     phrases = options[0]
-    out_of_context = options[1] 
+    out_of_context = options[1]
     perm_nicknames = []
     lists = [perm_nicknames, alt_nicknames]
-    
 
- 
-
-    #Tell Console we have logged in
+    # Tell Console we have logged in
     print(f"We have logged in as {bot.user}")
-    #Prepare bot 
+    # Prepare bot
 
     await bot.add_cog(CanvasCog(bot))
 
-    await bot.add_cog(Nick(bot, lists))
-    await bot.add_cog(Voice(bot))
-    await bot.add_cog(Software(bot))
-    await bot.add_cog(Cards(bot))
-    await bot.add_cog(Connect4(bot))
-    await bot.add_cog(Scum(bot))
+    # await bot.add_cog(Nick(bot, lists))
+    # await bot.add_cog(Voice(bot))
+    # await bot.add_cog(Software(bot))
+    # await bot.add_cog(Cards(bot))
+    # await bot.add_cog(Connect4(bot))
+    # await bot.add_cog(Scum(bot))
     await bot.wait_until_ready()
 
-
-
-    
-    #Get current server
+    # Get current server
     guild = bot.guilds[0]
 
-
-    #Find out who had permanent nick names before bot shutdown
+    # Find out who had permanent nick names before bot shutdown
     with open(permanent_file) as fd:
         lines = fd.readlines()
         for i, line in enumerate(lines):
             user = int(line.partition(":")[0])
-            #nickname = line.partition(":")[2]
+            # nickname = line.partition(":")[2]
             perm_nicknames.append(user)
         fd.close
-    #Find out who had an alternating nick name before bot shutdown
+    # Find out who had an alternating nick name before bot shutdown
     with open(alt_file) as fd:
         lines = fd.readlines()
         for i, line in enumerate(lines):
@@ -104,7 +98,8 @@ async def on_ready():
             elif current_nick == parameters[1]:
                 nick = parameters[0]
             else:
-                index = [(i, id.index(user)) for i, id in enumerate(alt_nicknames) if user in id][0][0]
+                index = [(i, id.index(user))
+                         for i, id in enumerate(alt_nicknames) if user in id][0][0]
                 alt_nicknames.pop(index)
                 continue
             alt_nicknames.append([user, nick, time])
@@ -113,41 +108,42 @@ async def on_ready():
     global jumpscareTask
     jumpscareTask = jumpscare.start()
 
-    #Initialise nick commands class
+    # Initialise nick commands class
 
     if len(alt_nicknames) != 0:
         nick_cog = bot.get_cog("Nick")
         await nick_cog.set_alt_nick_on_ready()
-    
 
 
-    
+###########################################################
 
-    
-###########################################################    
-
-#On message method
+# On message method
 @bot.event
-async def on_message(message):
-    #Checks if it is ROHIT and not a command
+async def on_message(message: discord.Message):
+    # Checks if it is ROHIT and not a command
     if message.author == guild.get_member(target) and not message.content.startswith("."):
-        random_opt = randint(0,1)
+        random_opt = randint(0, 1)
         random1 = randint(0, len(phrases)-1)
         random2 = randint(0, len(out_of_context)-1)
         randoms = [random1, random2]
-        #Send a random message from rohit's past
+        # Send a random message from rohit's past
         await message.channel.send(f"{options[random_opt][randoms[random_opt]]}")
     if message.content.startswith("."):
         await bot.process_commands(message)
     if message.content.startswith('!hello'):
-        embedVar = discord.Embed(title="Title", description="Desc", color=0x00ff00)
+        embedVar = discord.Embed(
+            title="Title", description="Desc", color=0x00ff00)
         embedVar.add_field(name="Field1", value="hi", inline=True)
         embedVar.add_field(name="Field2", value="hi2", inline=False)
         await message.channel.send(embed=embedVar)
+    if message.content == "arise":
+        await message.channel.send("Arise, my champion")
 
-#Error Handling
+# Error Handling
+
+
 @bot.tree.error
-async def on_command_error(interaction:discord.Interaction, error):
+async def on_command_error(interaction: discord.Interaction, error):
     if isinstance(error, discord.app_commands.CommandInvokeError):
         error = error.original
     if isinstance(error, InvalidAccessToken):
@@ -168,29 +164,27 @@ async def on_command_error(interaction:discord.Interaction, error):
         await interaction.response.send_message("Incorrect arguments entered")
         await interaction.channel.send(f"{error}")
     print('Ignoring exception in command {}:'.format(interaction.command))
-    traceback.print_exception(type(error), error, error.__traceback__)        
+    traceback.print_exception(type(error), error, error.__traceback__)
 
 
-
-
-#Send method (Move to another class)
-@bot.tree.command(name = "send", description="Send a message via the bot to a channel")
-async def send(interaction: discord.Interaction, channel:discord.TextChannel, *, message:str):
-    #Send's message to given channel
+# Send method (Move to another class)
+@bot.tree.command(name="send", description="Send a message via the bot to a channel")
+async def send(interaction: discord.Interaction, channel: discord.TextChannel, *, message: str):
+    # Send's message to given channel
     await channel.send(message)
     return await interaction.response.send_message("Sent message!")
 
 
-#Ping pong
-@bot.tree.command(name = "ping", description="Pong")
-async def ping(interaction: discord.Interaction, member:discord.Member=None, channel:discord.TextChannel=None):
-    #Ping's author
+# Ping pong
+@bot.tree.command(name="ping", description="Pong")
+async def ping(interaction: discord.Interaction, member: discord.Member = None, channel: discord.TextChannel = None):
+    # Ping's author
     if member == None:
         member = interaction.user
-    #Ping's user in current channel
+    # Ping's user in current channel
     if channel == None:
         channel = interaction.channel
-    #channel = discord.utils.get(bot.get_all_channels(), name="sounds")
+    # channel = discord.utils.get(bot.get_all_channels(), name="sounds")
     if member.status != discord.Status.offline:
         await channel.send(f"Hi <@{member.id}>!!")
     else:
@@ -199,15 +193,15 @@ async def ping(interaction: discord.Interaction, member:discord.Member=None, cha
 
 
 @bot.tree.command(description="Moves everyone away from target")
-async def move_all_away(interaction: discord.Interaction, member:discord.Member=None):
-    #Check if no target
+async def move_all_away(interaction: discord.Interaction, member: discord.Member = None):
+    # Check if no target
     if member == None:
-        member = guild.get_member(target) #target
-    #channel = discord.utils.get(bot.get_all_channels(), name="Noncess")
+        member = guild.get_member(target)  # target
+    # channel = discord.utils.get(bot.get_all_channels(), name="Noncess")
     name = member.name
     value = randint(0, 2)
 
-    #Move everyone except targetted person
+    # Move everyone except targetted person
     for i, channel in enumerate(guild.voice_channels):
         if member in channel.members:
             for user in channel.members:
@@ -228,44 +222,41 @@ timedOutMembers = {}
 async def jumpscare():
     while True:
         await asyncio.sleep(2)
-        #print(discord.utils.get(bot.voice_clients, guild = guild))
-        #print(jumpscareBool)
-        number=randint(30,600)
-        #print(number)
+        # print(discord.utils.get(bot.voice_clients, guild = guild))
+        # print(jumpscareBool)
+        number = randint(30, 600)
+        # print(number)
         await asyncio.sleep(number)
-        if jumpscareBool == True and discord.utils.get(bot.voice_clients, guild = guild) != None:
-                #print("boom time")
-                selfPlay("boom")
+        if jumpscareBool == True and discord.utils.get(bot.voice_clients, guild=guild) != None:
+            # print("boom time")
+            selfPlay("boom")
 
 
 def selfPlay(song):
-    vc = discord.utils.get(bot.voice_clients, guild = guild)
+    vc = discord.utils.get(bot.voice_clients, guild=guild)
     if vc.is_paused():
         vc.resume()
     else:
         vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"))
 
 
-
-@bot.tree.command(description = "Toggle the boom noise")
+@bot.tree.command(description="Toggle the boom noise")
 async def boom_toggle(interaction: discord.Interaction):
     global jumpscareBool
     jumpscareBool = not jumpscareBool
     await interaction.response.send_message(f"Jumpscare is now **{jumpscareBool}**")
 
 
-
 @bot.event
 async def on_voice_state_update(member, before, after):
     channel = discord.utils.get(bot.get_all_channels(), name="bot_commands")
-    #On join
+    # On join
     if not before.channel and after.channel:
-        #if member.id == 975378100630216704:
-            #jumpscareTask = await jumpscare.start()
+        # if member.id == 975378100630216704:
+        # jumpscareTask = await jumpscare.start()
         pass
 
-
-    #On disconnect
+    # On disconnect
     if before.channel and not after.channel:
         now = datetime.now()
         current_time = now.strftime("%H:%M:%S")
@@ -279,7 +270,7 @@ async def on_voice_state_update(member, before, after):
                 bans.pop(memberPos)
             except ValueError:
                 pass
-            
+
         if member.id in coasterUsers:
             await channel.send(f'{member} left WHILE COASTING!')
             timedOutMembers[member.id] = time.time()
@@ -287,15 +278,15 @@ async def on_voice_state_update(member, before, after):
             await asyncio.sleep(10)
             timedOutMembers.pop(member.id)
 
-    #Moved Channel
+    # Moved Channel
     if before.channel and after.channel:
         pass
 
-    #On channel connect
+    # On channel connect
     if after.channel:
         now = datetime.now()
         current_time = now.strftime("%H:%M:%S")
-        print(current_time,f'{member} has joined {after.channel}')
+        print(current_time, f'{member} has joined {after.channel}')
         if member.id in timedOutMembers:
             await member.move_to(None, reason="Timed out")
             await channel.send(f"{member} tried to rejoin VC but had too many injuries from falling off the coaster!")
@@ -319,33 +310,30 @@ async def on_voice_state_update(member, before, after):
                     pass
 
 
-
- 
 @bot.tree.command(description="Rollercoasts a user")
-async def rollercoaster(interaction:discord.Interaction, member:discord.Member=None, movetimes:int = 1):
-    #Check if no target
+async def rollercoaster(interaction: discord.Interaction, member: discord.Member = None, movetimes: int = 1):
+    # Check if no target
     if member == None:
         member = interaction.user
-    #if member.id == 238063640601821185:
-        #member = interaction.user
+    # if member.id == 238063640601821185:
+        # member = interaction.user
     if interaction.user.id == 694382869367226368:
-        #if member.id == 288884848012296202:
+        # if member.id == 288884848012296202:
         member = interaction.user
     initial_channel = member.voice.channel
 
     if member.voice is None:
         return await interaction.response.send_message("User is not in a channel")
-    
+
     if movetimes < 1:
         return await interaction.response.send_message("Please move at least 1 time")
 
-
     coasterUsers.append(member.id)
-    #name = member.display_name
-    value = randint(0,2)
+    # name = member.display_name
+    value = randint(0, 2)
     await interaction.response.send_message(f"Enjoy the ride <@{member.id}>!!!")
     await interaction.channel.send(f"Coasting {movetimes} times",)
-    #print(movetimes)
+    # print(movetimes)
     for i in range(movetimes):
         print(i+1)
         prev = value
@@ -358,15 +346,16 @@ async def rollercoaster(interaction:discord.Interaction, member:discord.Member=N
         await member.move_to(initial_channel)
     if member.id in coasterUsers:
         coasterUsers.remove(member.id)
-    
+
 
 global bannedMembers
 bannedMembers = []
 global bans
 bans = []
 
-@bot.tree.command(description = "Keep someone out of a voice channel")
-async def ban(interaction:discord.Interaction, member:discord.Member=None, bantime:int=10, channel:discord.VoiceChannel=None):
+
+@bot.tree.command(description="Keep someone out of a voice channel")
+async def ban(interaction: discord.Interaction, member: discord.Member = None, bantime: int = 10, channel: discord.VoiceChannel = None):
     if member.id in bannedMembers:
         return await interaction.response.send_message(f"{member} is already banned LOL")
     if member == None:
@@ -380,16 +369,16 @@ async def ban(interaction:discord.Interaction, member:discord.Member=None, banti
     bans.append(newBan)
 
 
-    
-#Send a private dm to a person
+# Send a private dm to a person
 @bot.tree.command(description="Send's an annonymous dm to a user")
-async def send_dm(interaction: discord.Interaction, user:discord.Member, *, message: str):
-    #Hide your message
-    #Creates a private dm
+async def send_dm(interaction: discord.Interaction, user: discord.Member, *, message: str):
+    # Hide your message
+    # Creates a private dm
     channel = await user.create_dm()
-    #Send's dm to user
+    # Send's dm to user
     await channel.send(message)
     return await interaction.response.send_message("Sent message!", ephemeral=True)
+
 
 def get_songs():
     songs = []
@@ -401,21 +390,22 @@ def get_songs():
 
 
 @bot.tree.command(description="Lists playable sounds")
-async def songs(interaction:discord.Interaction):
+async def songs(interaction: discord.Interaction):
     return await interaction.response.send_message(f"{get_songs()}", ephemeral=True)
 
+
 @bot.tree.command(description="Plays audio from bot")
-async def play(interaction:discord.Interaction, song:str = None):
+async def play(interaction: discord.Interaction, song: str = None):
     if song is not None:
         song = song.lower()
     if song not in get_songs() and song is not None:
         return await interaction.response.send_message(f"Not a valid song!\n Choose from\n {get_songs()}")
-    vc = discord.utils.get(bot.voice_clients, guild = guild)
+    vc = discord.utils.get(bot.voice_clients, guild=guild)
     if vc is None:
         print(dir(interaction.user.voice))
         current_vc = interaction.user.voice.channel
         await current_vc.connect()
-    vc = discord.utils.get(bot.voice_clients, guild = guild)
+    vc = discord.utils.get(bot.voice_clients, guild=guild)
     if vc.is_paused():
         vc.resume()
         return await interaction.response.send_message("Resuming")
@@ -425,9 +415,10 @@ async def play(interaction:discord.Interaction, song:str = None):
         vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"))
     return await interaction.response.send_message(f"Playing {song}")
 
+
 @bot.tree.command(description="Pauses the audio from bot")
-async def pause(interaction:discord.Interaction):
-    voice = discord.utils.get(bot.voice_clients, guild = guild)
+async def pause(interaction: discord.Interaction):
+    voice = discord.utils.get(bot.voice_clients, guild=guild)
     if voice is None:
         return await interaction.response.send_message("Murder Bot is not connected")
     if voice.is_playing():
@@ -436,9 +427,10 @@ async def pause(interaction:discord.Interaction):
     else:
         return await interaction.response.send_message("Currently no audio is playing")
 
+
 @bot.tree.command(description="Stops the audio from bot")
-async def stop(interaction:discord.Interaction):
-    voice = discord.utils.get(bot.voice_clients, guild = guild)
+async def stop(interaction: discord.Interaction):
+    voice = discord.utils.get(bot.voice_clients, guild=guild)
     if voice is None:
         return await interaction.response.send_message("Murder Bot is not connected")
     voice.stop()
@@ -448,6 +440,7 @@ async def stop(interaction:discord.Interaction):
 snipe_message_author = {}
 snipe_message_content = {}
 
+
 @bot.event
 async def on_message_delete(message):
     now = datetime.now()
@@ -455,7 +448,7 @@ async def on_message_delete(message):
     print(current_time, f"A message was deleted in channel {message.channel}")
     print(f"{message.author} said:\n{message.content}")
     if message.author.id == 975378100630216704:
-        #await message.channel.send(message.content)
+        # await message.channel.send(message.content)
         return
     if not message.channel.id in snipe_message_author or not message.channel.id in snipe_message_content:
         snipe_message_author[message.channel.id] = [message.author]
@@ -470,25 +463,29 @@ async def on_message_delete(message):
 
 
 @bot.tree.command(description="Snipes the last deleted message")
-async def snipe(interaction:discord.Interaction, channel:discord.TextChannel=None):
+async def snipe(interaction: discord.Interaction, channel: discord.TextChannel = None):
     if channel == None:
         channel = interaction.channel
-    try: #This piece of code is run if the bot finds anything in the dictionary
+    try:  # This piece of code is run if the bot finds anything in the dictionary
         for index, value in enumerate(snipe_message_content[channel.id]):
-            em = discord.Embed(title = f"Deleted message in #{channel.name}", description = value)
-            em.set_footer(text = f"This message was sent by {snipe_message_author[channel.id][index].name}")
-            return await interaction.response.send_message(embed = em)
-    except KeyError: #This piece of code is run if the bot doesn't find anything in the dictionary
+            em = discord.Embed(
+                title=f"Deleted message in #{channel.name}", description=value)
+            em.set_footer(
+                text=f"This message was sent by {snipe_message_author[channel.id][index].name}")
+            return await interaction.response.send_message(embed=em)
+    except KeyError:  # This piece of code is run if the bot doesn't find anything in the dictionary
         await interaction.response.send_message(f"There are no recently deleted messages in #{channel.name}")
 
+
 @bot.tree.command(description="Clears the snipe log")
-async def snipe_clear(interaction:discord.Interaction):
+async def snipe_clear(interaction: discord.Interaction):
     snipe_message_author.clear()
     snipe_message_content.clear()
     return await interaction.response.send_message("Cleared snipe log")
 
+
 @bot.tree.command(description="Deletes a user's messages in a given channel (testing purposes ONLY)")
-async def delete_messages(interaction:discord.Interaction, member:discord.Member, limit:int, channel:discord.TextChannel=None):
+async def delete_messages(interaction: discord.Interaction, member: discord.Member, limit: int, channel: discord.TextChannel = None):
     if channel == None:
         channel = interaction.channel
     if interaction.user.id != 238063640601821185:
@@ -498,7 +495,7 @@ async def delete_messages(interaction:discord.Interaction, member:discord.Member
     extra = 0
     if interaction.user.id == member.id:
         extra = 1
-    #flatten no longer works
+    # flatten no longer works
     for msg in await channel.history().flatten():
         if msg.author.id == member.id:
             msgs.append(msg)
@@ -508,31 +505,33 @@ async def delete_messages(interaction:discord.Interaction, member:discord.Member
     await channel.delete_messages(msgs)
     return await interaction.response.send_message("Deleted messages")
 
-    
-    #await message.delete()
+    # await message.delete()
 
-#Changes status of the discord bot
+# Changes status of the discord bot
+
+
 @bot.tree.command(description="Changes status of the bot")
-async def change_status(interaction:discord.Interaction, newstatus:discord.Status): 
-    #Changes the status of the bot
+async def change_status(interaction: discord.Interaction, newstatus: discord.Status):
+    # Changes the status of the bot
     await bot.change_presence(status=newstatus)
-    #Notifies user of status change 
+    # Notifies user of status change
     await interaction.response.send_message(f"Status successfully changed to {newstatus}")
 
 
-#Pull's user's profile picture
+# Pull's user's profile picture
 @bot.tree.command(description="Pulls user's profile picture")
-async def pfp(interaction:discord.Interaction, member:discord.User = None):
-    #If no member is specified, it will pull the profile picture of the user who sent the command
+async def pfp(interaction: discord.Interaction, member: discord.User = None):
+    # If no member is specified, it will pull the profile picture of the user who sent the command
     if member == None:
-        member:discord.Member = interaction.user
-    #Sends the profile picture of the member
+        member: discord.Member = interaction.user
+    # Sends the profile picture of the member
     if member.avatar is None:
         return await interaction.response.send_message("This user does not have a profile picture", ephemeral=True)
     return await interaction.response.send_message(member.avatar, ephemeral=True)
 
+
 @bot.tree.command(description="Create a custom emoji")
-async def create_emoji(interaction:discord.Interaction, name:str, link:str=None, circular:bool=False):
+async def create_emoji(interaction: discord.Interaction, name: str, link: str = None, circular: bool = False):
     await interaction.response.defer(ephemeral=True, thinking=True)
     if link is None:
         response = get(interaction.user.avatar)
@@ -553,18 +552,21 @@ async def create_emoji(interaction:discord.Interaction, name:str, link:str=None,
 
         # Apply the mask and crop the image
         masked_image = ImageOps.fit(image, mask.size, centering=(0.5, 0.5))
-        image = Image.composite(masked_image, Image.new("RGBA", mask.size), mask)
+        image = Image.composite(
+            masked_image, Image.new("RGBA", mask.size), mask)
 
     image_buffer = BytesIO()
     image.save(image_buffer, format="PNG")  # Save the image to the buffer
     image_buffer.seek(0)
-        
+
     await interaction.guild.create_custom_emoji(name=name, image=image_buffer.read())
     return await interaction.edit_original_response(content=f"Created emoji {name}")
 
+
 @bot.tree.command(description="Delete a custom emoji")
-async def delete_emoji(interaction:discord.Interaction, name:str):
-    emojis = [emoji for emoji in guild.emojis if name.lower() in emoji.name.lower()]
+async def delete_emoji(interaction: discord.Interaction, name: str):
+    emojis = [emoji for emoji in guild.emojis if name.lower()
+              in emoji.name.lower()]
     await interaction.response.defer(ephemeral=True, thinking=True)
     if not emojis:
         await interaction.edit_original_response(content=f"No emojis found containing the substring '{name}'.")
@@ -587,19 +589,139 @@ async def delete_emoji(interaction:discord.Interaction, name:str):
 #     # do stuff with elem here
 #     await interaction.response.send_message(f"DM's of {member.name}#{member.discriminator}:\n{[i.content async for i in dm]}", ephemeral=True)
 
+
+class DiscordEnum(Enum):
+    QUEENS = "Queens"
+
+
+class ScoreboardView(View):
+    def __init__(self, game: str):
+        super().__init__()
+        self.game = game
+        self.sort_by = 'best_time'  # Default sorting
+
+    @discord.ui.button(label="Sort by Best Time", style=discord.ButtonStyle.primary)
+    async def sort_by_best_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.sort_by = 'best_time'
+        await self.update_scoreboard(interaction)
+
+    @discord.ui.button(label="Sort by Wins", style=discord.ButtonStyle.secondary)
+    async def sort_by_wins(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.sort_by = 'wins'
+        await self.update_scoreboard(interaction)
+
+    async def update_scoreboard(self, interaction: discord.Interaction):
+        # Defer the interaction to avoid timeout
+        await interaction.response.defer(ephemeral=False)
+
+        file_path = f"{self.game}_scoreboard.txt"
+
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                scores = file.readlines()
+
+            player_stats = {}
+            for score in scores:
+                parts = score.strip().split(" - ")
+                if len(parts) == 3:
+                    game_number, time, user = parts
+                    minutes, seconds = map(int, time.split(":"))
+                    total_time = minutes * 60 + seconds
+
+                    if user not in player_stats:
+                        player_stats[user] = {
+                            'wins': 0, 'best_time': float('inf')}
+                    player_stats[user]['wins'] += 1
+                    if total_time < player_stats[user]['best_time']:
+                        player_stats[user]['best_time'] = total_time
+
+            if self.sort_by == 'best_time':
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (
+                    item[1]['best_time'], -item[1]['wins']))
+            else:
+                sorted_stats = sorted(player_stats.items(
+                ), key=lambda item: (-item[1]['wins'], item[1]['best_time']))
+
+            embed = discord.Embed(title=f"Scoreboard for {
+                                  self.game}", color=discord.Color.blue())
+            for user, stats in sorted_stats:
+                best_time_minutes = stats['best_time'] // 60
+                best_time_seconds = stats['best_time'] % 60
+                embed.add_field(name=f"{user}", value=f"Wins: {
+                                stats['wins']} - Best Time: {best_time_minutes}:{best_time_seconds:02d}", inline=False)
+
+            # Edit the original response with the updated scoreboard
+            if interaction.response.is_done():
+                await interaction.edit_original_response(embed=embed, view=self)
+            else:
+                await interaction.response.send_message(embed=embed, view=self)
+        else:
+            # Send an error message if no scores are found
+            if interaction.response.is_done():
+                await interaction.edit_original_response(content=f"No scores found for {self.game}.", ephemeral=True)
+            else:
+                await interaction.response.send_message(content=f"No scores found for {self.game}.", ephemeral=True)
+
+
+@bot.tree.command(name="scoreboard")
+@app_commands.describe(option="Choose a scoreboard")
+@app_commands.choices(option=[
+    app_commands.Choice(name=option.name, value=option.value) for option in DiscordEnum
+])
+async def scoreboard(interaction: discord.Interaction, option: app_commands.Choice[str]):
+    game = option.value.lower()
+    view = ScoreboardView(game=game)
+    await view.update_scoreboard(interaction)
+
+
+@bot.command(description="Updates the Queens scoreboard")
+async def update_queens(ctx: commands.Context):
+    # Replace with your channel ID
+    channel = bot.get_channel(1263813201707929610)
+    messages = channel.history(limit=10)
+
+    # Read existing scores and store them in a set
+    existing_scores = set()
+    file_path = "queens_scoreboard.txt"
+
+    if os.path.exists(file_path):
+        with open(file_path, "r") as file:
+            existing_scores = set(line.strip() for line in file)
+
+    new_scores = []
+
+    async for message in messages:
+        if message.content.startswith("Queens"):
+            match = re.search(r'#(\d+)\n(\d+:\d+)', message.content)
+            if match:
+                game_number = match.group(1)
+                time = match.group(2)
+                user = message.author.display_name
+                score_entry = f"Game #{game_number} - {time} - {user}"
+
+                # Append new score if it's not already in the file
+                if score_entry not in existing_scores:
+                    new_scores.append(score_entry)
+
+    # Append new scores to the file
+    if new_scores:
+        with open(file_path, "a") as file:
+            for score in new_scores:
+                file.write(score + "\n")
+
+    await ctx.send("Updated Queens scoreboard", ephemeral=True)
+
+
 @bot.command()
 async def sync(ctx):
     await bot.tree.sync()
 
+
 @bot.tree.command(description="Syncs the slash commands")
-async def sync(interaction:discord.Interaction):
+async def sync(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=False, thinking=True)
     await bot.tree.sync()
     return await interaction.edit_original_response(content="Synced slash commands")
 
-#Run's the bot
+# Run's the bot
 bot.run(token)
-
-
-
-
