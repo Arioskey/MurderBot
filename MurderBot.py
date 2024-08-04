@@ -1,3 +1,4 @@
+from discord.ui import View
 from discord.ext import commands
 from enum import Enum
 from PIL import Image, ImageDraw, ImageOps
@@ -105,8 +106,9 @@ async def on_ready():
             alt_nicknames.append([user, nick, time])
         fd.close
 
-    global jumpscareTask
+    global jumpscareTask, updateQueensTask
     jumpscareTask = jumpscare.start()
+    updateQueensTask = updateQueens.start()
 
     # Initialise nick commands class
 
@@ -577,21 +579,23 @@ async def delete_emoji(interaction: discord.Interaction, name: str):
             deleted_emojis.append(emoji.name)
     return await interaction.edit_original_response(content=f"Deleted emojis containing the substring '{name}': {' '.join(deleted_emojis)}")
 
-# @bot.tree.command(description="Checks dm's of a user")
-# async def check_dms(interaction:discord.Interaction, member:discord.Member):
-#     if interaction.user.id != 238063640601821185:
-#         return await interaction.response.send_message("You do not have access to this command")
-#     if member.dm_channel is None:
-#         await member.create_dm()
 
-#     dm = member.dm_channel.history()
-#     print([i.content async for i in dm])
-#     # do stuff with elem here
-#     await interaction.response.send_message(f"DM's of {member.name}#{member.discriminator}:\n{[i.content async for i in dm]}", ephemeral=True)
+@bot.tree.command(description="Checks dm's of a user")
+async def check_dms(interaction: discord.Interaction, member: discord.Member):
+    if interaction.user.id != 238063640601821185:
+        return await interaction.response.send_message("You do not have access to this command")
+    if member.dm_channel is None:
+        await member.create_dm()
+
+    dm = member.dm_channel.history()
+    print([i.content async for i in dm])
+    # do stuff with elem here
+    await interaction.response.send_message(f"DM's of {member.name}#{member.discriminator}:\n{[i.content async for i in dm]}", ephemeral=True)
 
 
 class DiscordEnum(Enum):
     QUEENS = "Queens"
+    CROSSCLIMB = "Crossclimb"
 
 
 class ScoreboardView(View):
@@ -608,6 +612,16 @@ class ScoreboardView(View):
     @discord.ui.button(label="Sort by Wins", style=discord.ButtonStyle.secondary)
     async def sort_by_wins(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.sort_by = 'wins'
+        await self.update_scoreboard(interaction)
+
+    @discord.ui.button(label="Sort by Average Time", style=discord.ButtonStyle.success)
+    async def sort_by_average_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.sort_by = 'average_time'
+        await self.update_scoreboard(interaction)
+
+    @discord.ui.button(label="Sort by Total Time", style=discord.ButtonStyle.danger)
+    async def sort_by_total_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.sort_by = 'total_time'
         await self.update_scoreboard(interaction)
 
     async def update_scoreboard(self, interaction: discord.Interaction):
@@ -630,25 +644,51 @@ class ScoreboardView(View):
 
                     if user not in player_stats:
                         player_stats[user] = {
-                            'wins': 0, 'best_time': float('inf')}
+                            'wins': 0, 'best_time': float('inf'), 'total_time': 0, 'games_played': 0}
                     player_stats[user]['wins'] += 1
+                    player_stats[user]['total_time'] += total_time
+                    player_stats[user]['games_played'] += 1
                     if total_time < player_stats[user]['best_time']:
                         player_stats[user]['best_time'] = total_time
+
+            for user in player_stats:
+                player_stats[user]['average_time'] = player_stats[user]['total_time'] / \
+                    player_stats[user]['games_played']
 
             if self.sort_by == 'best_time':
                 sorted_stats = sorted(player_stats.items(), key=lambda item: (
                     item[1]['best_time'], -item[1]['wins']))
-            else:
-                sorted_stats = sorted(player_stats.items(
-                ), key=lambda item: (-item[1]['wins'], item[1]['best_time']))
+            elif self.sort_by == 'average_time':
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (
+                    item[1]['average_time'], -item[1]['wins']))
+            elif self.sort_by == 'total_time':
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (
+                    item[1]['total_time'], -item[1]['wins']))
+            else:  # sort_by == 'wins'
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (
+                    -item[1]['wins'], item[1]['best_time']))
 
             embed = discord.Embed(title=f"Scoreboard for {
                                   self.game}", color=discord.Color.blue())
             for user, stats in sorted_stats:
                 best_time_minutes = stats['best_time'] // 60
                 best_time_seconds = stats['best_time'] % 60
-                embed.add_field(name=f"{user}", value=f"Wins: {
-                                stats['wins']} - Best Time: {best_time_minutes}:{best_time_seconds:02d}", inline=False)
+                average_time_minutes = int(stats['average_time']) // 60
+                average_time_seconds = int(stats['average_time']) % 60
+                total_time_minutes = int(stats['total_time']) // 60
+                total_time_seconds = int(stats['total_time']) % 60
+                embed.add_field(
+                    name=f"{user}",
+                    value=(
+                        f"Wins: {
+                            stats['wins']} - Best Time: {best_time_minutes}:{best_time_seconds:02d} - "
+                        f"Total Time: {total_time_minutes}:{
+                            total_time_seconds:02d} - "
+                        f"Average Time: {average_time_minutes}:{
+                            average_time_seconds:02d}"
+                    ),
+                    inline=False
+                )
 
             # Edit the original response with the updated scoreboard
             if interaction.response.is_done():
@@ -674,11 +714,58 @@ async def scoreboard(interaction: discord.Interaction, option: app_commands.Choi
     await view.update_scoreboard(interaction)
 
 
-@bot.command(description="Updates the Queens scoreboard")
-async def update_queens(ctx: commands.Context):
-    # Replace with your channel ID
+async def crossclimbUpdate():
+    try:
+        # Replace 'your_channel_id' with the actual channel ID for Crossclimb
+        channel = bot.get_channel(1263813201707929610)
+
+        # Fetch message history with awaiting
+        messages = channel.history(limit=250)
+
+        # Read existing scores and store them in a set
+        existing_scores = set()
+        file_path = "crossclimb_scoreboard.txt"
+
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                existing_scores = set(line.strip() for line in file)
+
+        new_scores = []
+
+        # Iterate over messages
+        async for message in messages:
+
+            if message.content.startswith("Crossclimb"):
+                match = re.search(r'#(\d+)\n(\d+:\d+)', message.content)
+                if match:
+                    game_number = match.group(1)
+                    time = match.group(2)
+                    user = message.author.display_name
+                    score_entry = f"Game #{game_number} - {time} - {user}"
+
+                    # Append new score if it's not already in the file
+                    if score_entry not in existing_scores:
+                        new_scores.append(score_entry)
+
+        # Append new scores to the file
+        if new_scores:
+            with open(file_path, "a") as file:
+                for score in new_scores:
+                    file.write(score + "\n")
+
+            print(f"Added {len(new_scores)
+                           } new scores to the Crossclimb scoreboard.")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+# Remember to run the bot
+# bot.run('your_token_here')
+
+
+async def queensUpdate():
     channel = bot.get_channel(1263813201707929610)
-    messages = channel.history(limit=10)
+    messages = channel.history(limit=250)
 
     # Read existing scores and store them in a set
     existing_scores = set()
@@ -709,7 +796,25 @@ async def update_queens(ctx: commands.Context):
             for score in new_scores:
                 file.write(score + "\n")
 
+
+@tasks.loop()
+async def updateQueens():
+    while True:
+        print("Updating scoreboard")
+        await queensUpdate()
+        await asyncio.sleep(600)
+
+
+@bot.command(description="Updates the Queens scoreboard")
+async def update_queens(ctx: commands.Context):
+    await queensUpdate()
     await ctx.send("Updated Queens scoreboard", ephemeral=True)
+
+
+@bot.command(description="Updates the Crossclimb scoreboard")
+async def update_crossclimb(ctx: commands.Context):
+    await crossclimbUpdate()
+    await ctx.send("Updated Crossclimb scoreboard", ephemeral=True)
 
 
 @bot.command()
