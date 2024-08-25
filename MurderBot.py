@@ -397,46 +397,60 @@ async def songs(interaction: discord.Interaction):
 
 
 @bot.tree.command(description="Plays audio from bot")
-async def play(interaction: discord.Interaction, song: str = None):
+@app_commands.describe(song="The name of the song to play")
+async def play(interaction: discord.Interaction, song: str = None, replay: bool = False):
+    guild = interaction.guild
+    vc = discord.utils.get(bot.voice_clients, guild=guild)
+
     if song is not None:
         song = song.lower()
-    if song not in get_songs() and song is not None:
-        return await interaction.response.send_message(f"Not a valid song!\n Choose from\n {get_songs()}")
-    vc = discord.utils.get(bot.voice_clients, guild=guild)
-    if vc is None:
-        print(dir(interaction.user.voice))
+
+    available_songs = get_songs()
+
+    if song not in available_songs and song is not None:
+        await interaction.response.send_message(f"Not a valid song! Choose from: {', '.join(available_songs)}", ephemeral=True)
+        return
+
+    if vc is None or not vc.is_connected():
         current_vc = interaction.user.voice.channel
-        await current_vc.connect()
-    vc = discord.utils.get(bot.voice_clients, guild=guild)
-    if vc.is_paused():
-        vc.resume()
-        return await interaction.response.send_message("Resuming")
-    elif song is None:
-        return await interaction.response.send_message(f"Not a valid song!\n Choose from\n {get_songs()}")
-    else:
-        vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"))
-    return await interaction.response.send_message(f"Playing {song}")
+        vc = await current_vc.connect()
+
+    def after_playback(error):
+        if replay:
+            vc.play(discord.FFmpegPCMAudio(
+                f"Songs/{song}.mp3"), after=after_playback)
+        elif error:
+            print(f"Error occurred during playback: {error}")
+
+    vc.play(discord.FFmpegPCMAudio(f"Songs/{song}.mp3"), after=after_playback)
+    await interaction.response.send_message(f"Playing {song}{' (will replay)' if replay else ''}")
+
 
 
 @bot.tree.command(description="Pauses the audio from bot")
 async def pause(interaction: discord.Interaction):
+    guild = interaction.guild
     voice = discord.utils.get(bot.voice_clients, guild=guild)
+
     if voice is None:
-        return await interaction.response.send_message("Murder Bot is not connected")
+        return await interaction.response.send_message("Murder Bot is not connected", ephemeral=True)
+
     if voice.is_playing():
         voice.pause()
         return await interaction.response.send_message("Paused audio")
     else:
-        return await interaction.response.send_message("Currently no audio is playing")
+        return await interaction.response.send_message("Currently no audio is playing", ephemeral=True)
 
 
 @bot.tree.command(description="Stops the audio from bot")
 async def stop(interaction: discord.Interaction):
+    guild = interaction.guild
     voice = discord.utils.get(bot.voice_clients, guild=guild)
-    if voice is None:
-        return await interaction.response.send_message("Murder Bot is not connected")
-    voice.stop()
 
+    if voice is None:
+        return await interaction.response.send_message("Murder Bot is not connected", ephemeral=True)
+
+    voice.stop()
     return await interaction.response.send_message("Stopped audio")
 
 snipe_message_author = {}
