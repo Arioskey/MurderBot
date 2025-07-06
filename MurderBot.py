@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageOps
 from io import BytesIO
 from requests import get
 from datetime import datetime
+from collections import defaultdict
 from typing import Optional, Union
 from canvasapi.exceptions import InvalidAccessToken, ResourceDoesNotExist, Forbidden
 from scum import Scum
@@ -13,6 +14,7 @@ from connect4 import Connect4
 from canvas import CanvasCog
 from banned import Banned
 from words import allPhrases
+from image_game.image_cog import ImageGameCog
 from random import randint
 from software import Software
 from voice import Voice
@@ -44,7 +46,11 @@ players = {}
 jumpscareBool = True
 
 # Bot setup
-bot = commands.Bot(command_prefix='.', test_guilds=[852379093776465940, 1263346277744246895], intents=discord.Intents.all(
+guilds = [
+    852379093776465940,
+    1263346277744246895
+]
+bot = commands.Bot(command_prefix='.', test_guilds=guilds, intents=discord.Intents.all(
 ), case_insensitive=True, strip_after_prefix=True, status=discord.Status.invisible)
 
 
@@ -63,8 +69,9 @@ async def on_ready():
     # Tell Console we have logged in
     print(f"We have logged in as {bot.user}")
     # Prepare bot
+    await bot.add_cog(ImageGameCog(bot))
 
-    await bot.add_cog(CanvasCog(bot))
+    # await bot.add_cog(CanvasCog(bot))
 
     # await bot.add_cog(Nick(bot, lists))
     # await bot.add_cog(Voice(bot))
@@ -106,9 +113,9 @@ async def on_ready():
             alt_nicknames.append([user, nick, time])
         fd.close
 
-    global jumpscareTask, updateQueensTask
+    global jumpscareTask, updateScoreboardsTask
     jumpscareTask = jumpscare.start()
-    updateQueensTask = updateQueens.start()
+    updateScoreboardsTask = update_scoreboard_task.start()
 
     # Initialise nick commands class
 
@@ -610,16 +617,30 @@ async def check_dms(interaction: discord.Interaction, member: discord.Member):
 class DiscordEnum(Enum):
     QUEENS = "Queens"
     CROSSCLIMB = "Crossclimb"
-
+    TANGO = "Tango"
+    ZIP = "Zip"
+    PINPOINT = "Pinpoint"
 
 class ScoreboardView(View):
+    TIME_GAMES = {'queens', 'crossclimb', 'tango', 'zip'}
+    GUESS_GAMES = {'pinpoint'}
+
     def __init__(self, game: str):
         super().__init__()
         self.game = game
-        self.sort_by = 'best_time'  # Default sorting
+        self.sort_by = 'best_time' if game in self.TIME_GAMES else 'wins'
+
+        if self.game == "pinpoint":
+            # Disable all buttons for pinpoint
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
 
     @discord.ui.button(label="Sort by Best Time", style=discord.ButtonStyle.primary)
     async def sort_by_best_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.game not in self.TIME_GAMES:
+            await interaction.response.send_message("⏱️ Sorting by time is not applicable for this game.", ephemeral=True)
+            return
         self.sort_by = 'best_time'
         await self.update_scoreboard(interaction)
 
@@ -630,92 +651,169 @@ class ScoreboardView(View):
 
     @discord.ui.button(label="Sort by Average Time", style=discord.ButtonStyle.success)
     async def sort_by_average_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.game not in self.TIME_GAMES:
+            await interaction.response.send_message("⏱️ Sorting by time is not applicable for this game.", ephemeral=True)
+            return
         self.sort_by = 'average_time'
         await self.update_scoreboard(interaction)
 
     @discord.ui.button(label="Sort by Total Time", style=discord.ButtonStyle.danger)
     async def sort_by_total_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.game not in self.TIME_GAMES:
+            await interaction.response.send_message("⏱️ Sorting by time is not applicable for this game.", ephemeral=True)
+            return
         self.sort_by = 'total_time'
         await self.update_scoreboard(interaction)
 
     async def update_scoreboard(self, interaction: discord.Interaction):
-        # Defer the interaction to avoid timeout
         await interaction.response.defer(ephemeral=False)
-
         file_path = f"{self.game}_scoreboard.txt"
 
-        if os.path.exists(file_path):
-            with open(file_path, "r") as file:
-                scores = file.readlines()
+        if not os.path.exists(file_path):
+            msg = f"No scores found for {self.game}."
+            if interaction.response.is_done():
+                await interaction.edit_original_response(content=msg)
+            else:
+                await interaction.response.send_message(content=msg, ephemeral=True)
+            return
 
-            player_stats = {}
-            for score in scores:
-                parts = score.strip().split(" - ")
-                if len(parts) == 3:
-                    game_number, time, user = parts
-                    minutes, seconds = map(int, time.split(":"))
-                    total_time = minutes * 60 + seconds
+        with open(file_path, "r", encoding="utf-8") as file:
+            scores = file.readlines()
 
-                    if user not in player_stats:
-                        player_stats[user] = {
-                            'wins': 0, 'best_time': float('inf'), 'total_time': 0, 'games_played': 0}
-                    player_stats[user]['wins'] += 1
-                    player_stats[user]['total_time'] += total_time
-                    player_stats[user]['games_played'] += 1
-                    if total_time < player_stats[user]['best_time']:
-                        player_stats[user]['best_time'] = total_time
+        player_stats = {}
+        guess_distribution = defaultdict(lambda: defaultdict(int))
+        time_pattern = re.compile(r"(\d+):(\d+)")
+        guess_line_pattern = re.compile(r"(\d+)")
 
+        for score in scores:
+            parts = score.strip().split(" - ")
+            if len(parts) != 3:
+                continue
+
+            game_number, detail, user = parts
+
+            if user not in player_stats:
+                player_stats[user] = {
+                    'wins': 0,
+                    'best_time': float('inf'),
+                    'total_time': 0,
+                    'games_played': 0,
+                    'best_guess': float('inf')
+                }
+
+            player_stats[user]['wins'] += 1
+
+            if self.game in self.TIME_GAMES:
+                time_match = time_pattern.match(detail)
+                if not time_match:
+                    continue
+                minutes, seconds = map(int, time_match.groups())
+                total_seconds = minutes * 60 + seconds
+                player_stats[user]['total_time'] += total_seconds
+                player_stats[user]['games_played'] += 1
+                if total_seconds < player_stats[user]['best_time']:
+                    player_stats[user]['best_time'] = total_seconds
+
+            elif self.game == 'pinpoint':
+                guess_match = guess_line_pattern.match(detail)
+                guesses = int(guess_match.group(1)) if guess_match else None
+                player_stats[user]['games_played'] += 1
+                if guesses:
+                    if guesses < player_stats[user]['best_guess']:
+                        player_stats[user]['best_guess'] = guesses
+                    guess_distribution[user][guesses] += 1
+                else:
+                    guess_distribution[user]['N/A'] += 1
+
+        if self.game in self.TIME_GAMES:
             for user in player_stats:
-                player_stats[user]['average_time'] = player_stats[user]['total_time'] / \
-                    player_stats[user]['games_played']
+                if player_stats[user]['games_played'] > 0:
+                    player_stats[user]['average_time'] = player_stats[user]['total_time'] / player_stats[user]['games_played']
+                else:
+                    player_stats[user]['average_time'] = 0
 
+        if self.game in self.TIME_GAMES:
             if self.sort_by == 'best_time':
-                sorted_stats = sorted(player_stats.items(), key=lambda item: (
-                    item[1]['best_time'], -item[1]['wins']))
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (item[1]['best_time'], -item[1]['wins']))
             elif self.sort_by == 'average_time':
-                sorted_stats = sorted(player_stats.items(), key=lambda item: (
-                    item[1]['average_time'], -item[1]['wins']))
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (item[1]['average_time'], -item[1]['wins']))
             elif self.sort_by == 'total_time':
-                sorted_stats = sorted(player_stats.items(), key=lambda item: (
-                    item[1]['total_time'], -item[1]['wins']))
-            else:  # sort_by == 'wins'
-                sorted_stats = sorted(player_stats.items(), key=lambda item: (
-                    -item[1]['wins'], item[1]['best_time']))
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (item[1]['total_time'], -item[1]['wins']))
+            else:
+                sorted_stats = sorted(player_stats.items(), key=lambda item: (-item[1]['wins'], item[1]['best_time']))
+        else:
+            sorted_stats = sorted(player_stats.items(), key=lambda item: (-item[1]['wins'], item[1]['best_guess']))
 
-            embed = discord.Embed(title=f"Scoreboard for {
-                                  self.game}", color=discord.Color.blue())
-            for user, stats in sorted_stats:
-                best_time_minutes = stats['best_time'] // 60
-                best_time_seconds = stats['best_time'] % 60
-                average_time_minutes = int(stats['average_time']) // 60
-                average_time_seconds = int(stats['average_time']) % 60
-                total_time_minutes = int(stats['total_time']) // 60
-                total_time_seconds = int(stats['total_time']) % 60
+        embed = discord.Embed(title=f"Scoreboard for {self.game.title()}", color=discord.Color.blue())
+
+        for user, stats in sorted_stats:
+            if self.game in self.TIME_GAMES:
+                best_m, best_s = divmod(int(stats['best_time']), 60)
+                avg_m, avg_s = divmod(int(stats.get('average_time', 0)), 60)
+                total_m, total_s = divmod(int(stats['total_time']), 60)
                 embed.add_field(
-                    name=f"{user}",
+                    name=user,
                     value=(
-                        f"Wins: {
-                            stats['wins']} - Best Time: {best_time_minutes}:{best_time_seconds:02d} - "
-                        f"Total Time: {total_time_minutes}:{
-                            total_time_seconds:02d} - "
-                        f"Average Time: {average_time_minutes}:{
-                            average_time_seconds:02d}"
+                        f"Wins: {stats['wins']} - "
+                        f"Best Time: {best_m}:{best_s:02d} - "
+                        f"Total Time: {total_m}:{total_s:02d} - "
+                        f"Average Time: {avg_m}:{avg_s:02d}"
+                    ),
+                    inline=False
+                )
+            elif self.game == 'pinpoint':
+                dist = guess_distribution[user]
+                if dist:
+                    max_count = max(dist.values())
+                    max_bar_len = 25  # max bars per line
+                    color_blocks = ['🟥', '🟧', '🟨', '🟩', '🟦', '🟪']
+
+                    def guess_key(x):
+                        k = x[0]
+                        try:
+                            return int(k)
+                        except:
+                            return 999
+
+                    dist_items_sorted = sorted(dist.items(), key=guess_key)
+
+                    dist_lines = []
+                    max_bar_len = 24  # Adjusted for Discord width limits
+                    color_blocks = ['🟥', '🟧', '🟨', '🟩', '🟦', '🟪']
+
+                    for guess, count in dist_items_sorted:
+                        bar_len = int((count / max_count) * max_bar_len) if max_count > 0 else 0
+                        bar_len = max(bar_len, 1) if count > 0 else 0  # always at least 1 block
+
+                        if isinstance(guess, int):
+                            color = color_blocks[(guess - 1) % len(color_blocks)]
+                            bar = color * bar_len
+                            dist_lines.append(f"{guess}: {bar} ({count})")
+                        else:
+                            bar = '⬜' * bar_len
+                            dist_lines.append(f"N/A: {bar} ({count})")
+
+                    dist_str = "\n".join(dist_lines)
+                else:
+                    dist_str = "No data"
+
+                wins_corrected = stats['wins'] - dist.get('N/A', 0)
+                win_percentage = (wins_corrected / stats['games_played'] * 100) if stats['games_played'] > 0 else 0
+
+                embed.add_field(
+                    name=user,
+                    value=(
+                        f"Wins: {wins_corrected} - Games Played: {stats['games_played']} - Win Rate: {win_percentage:.1f}%\n"
+                        f"Guesses Distribution:\n{dist_str}"
                     ),
                     inline=False
                 )
 
-            # Edit the original response with the updated scoreboard
-            if interaction.response.is_done():
-                await interaction.edit_original_response(embed=embed, view=self)
-            else:
-                await interaction.response.send_message(embed=embed, view=self)
-        else:
-            # Send an error message if no scores are found
-            if interaction.response.is_done():
-                await interaction.edit_original_response(content=f"No scores found for {self.game}.", ephemeral=True)
-            else:
-                await interaction.response.send_message(content=f"No scores found for {self.game}.", ephemeral=True)
 
+        if interaction.response.is_done():
+            await interaction.edit_original_response(embed=embed, view=self)
+        else:
+            await interaction.response.send_message(embed=embed, view=self)
 
 @bot.tree.command(name="scoreboard")
 @app_commands.describe(option="Choose a scoreboard")
@@ -728,107 +826,148 @@ async def scoreboard(interaction: discord.Interaction, option: app_commands.Choi
     await view.update_scoreboard(interaction)
 
 
-async def crossclimbUpdate():
-    try:
-        # Replace 'your_channel_id' with the actual channel ID for Crossclimb
-        channel = bot.get_channel(1263813201707929610)
+# Game-specific configurations
+GAME_CONFIG = {
+    "queens": {
+        "regex": re.compile(
+            r"Queens\s+#(\d+).*?(\d{1,2}:\d{2}).*?(https?://)?lnkd\.in/[^\s]+",
+            re.IGNORECASE | re.DOTALL
+        ),
+        "file": "queens_scoreboard.txt",
+        "keyword": "queens"
+    },
+    "crossclimb": {
+        "regex": re.compile(
+            r'#(\d+)(?:\s*\|\s*|\n)(\d+:\d+)',
+            re.IGNORECASE
+        ),
+        "file": "crossclimb_scoreboard.txt",
+        "keyword": "crossclimb"
+    },
+    "pinpoint": {
+        "regex": re.compile(
+            r"Pinpoint\s+#(\d+)(?:\s*\|\s*(\d+)\s*guess(?:es)?)?",
+            re.IGNORECASE
+        ),
+        "regex_score": re.compile(
+            r"\((\d+)/5\)",
+            re.IGNORECASE
+        ),
+        "file": "pinpoint_scoreboard.txt",
+        "keyword": "pinpoint"
+    },
+    "tango": {
+        "regex": re.compile(
+            r"Tango\s+#(\d+)(?:\s*\|\s*(\d{1,2}:\d{2}))?",
+            re.IGNORECASE
+        ),
+        "file": "tango_scoreboard.txt",
+        "keyword": "tango"
+    },
+    "zip": {
+        "regex": re.compile(
+            r"Zip\s+#(\d+)\s*\|\s*(\d{1,2}:\d{2}).*?lnkd\.in/zip\.",
+            re.IGNORECASE | re.DOTALL
+        ),
+        "file": "zip_scoreboard.txt",
+        "keyword": "zip"
+    }
+}
 
-        # Fetch message history with awaiting
-        messages = channel.history(limit=250)
+async def scan_and_update_all_games(channel_id: int, message_limit: int = None):
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        print(f"❌ Channel {channel_id} not found.")
+        return
 
-        # Read existing scores and store them in a set
-        existing_scores = set()
-        file_path = "crossclimb_scoreboard.txt"
+    # Load existing entries per game
+    existing_scores = {}
+    new_scores = {}
 
-        if os.path.exists(file_path):
-            with open(file_path, "r") as file:
-                existing_scores = set(line.strip() for line in file)
+    for game, config in GAME_CONFIG.items():
+        if os.path.exists(config["file"]):
+            with open(config["file"], "r", encoding="utf-8") as f:
+                existing_scores[game] = set(line.strip() for line in f)
+        else:
+            existing_scores[game] = set()
 
-        new_scores = []
+        new_scores[game] = []
 
-        # Iterate over messages
-        async for message in messages:
+    # Scan the channel history once
+    async for message in channel.history(limit=message_limit):
+        content_lower = message.content.lower()
+        for game, config in GAME_CONFIG.items():
+            if config["keyword"] not in content_lower:
+                continue
 
-            if message.content.startswith("Crossclimb"):
-                match = re.search(r'#(\d+)\n(\d+:\d+)', message.content)
+            if game == "pinpoint":
+                lines = message.content.splitlines()
+                if not lines:
+                    continue
+
+                first_line = lines[0]
+                match = config["regex"].search(first_line)
+                if not match:
+                    continue
+
+                game_number = match.group(1)
+                guesses_count = match.group(2)
+
+                if not guesses_count:
+                    guesses_count = "N/A"
+                    # Search all lines except the first for (x/5)
+                    for line in lines[1:]:
+                        line = line.strip()
+                        score_match = config["regex_score"].search(line)
+                        if score_match:
+                            guesses_count = score_match.group(1)
+                            break
+
+                user = message.author.display_name
+                score_entry = f"Game #{game_number} - {guesses_count} - {user}"
+
+                if score_entry not in existing_scores[game]:
+                    new_scores[game].append(score_entry)
+
+            else:
+                match = config["regex"].search(message.content)
                 if match:
                     game_number = match.group(1)
-                    time = match.group(2)
+                    game_detail = match.group(2) if len(match.groups()) >= 2 and match.group(2) else "N/A"
                     user = message.author.display_name
-                    score_entry = f"Game #{game_number} - {time} - {user}"
+                    score_entry = f"Game #{game_number} - {game_detail} - {user}"
 
-                    # Append new score if it's not already in the file
-                    if score_entry not in existing_scores:
-                        new_scores.append(score_entry)
+                    if score_entry not in existing_scores[game]:
+                        new_scores[game].append(score_entry)
 
-        # Append new scores to the file
-        if new_scores:
-            with open(file_path, "a") as file:
-                for score in new_scores:
-                    file.write(score + "\n")
+    # Append new scores per game
+    for game, scores in new_scores.items():
+        if scores:
+            with open(GAME_CONFIG[game]["file"], "a", encoding="utf-8") as f:
+                for entry in scores:
+                    f.write(entry + "\n")
+            print(f"✅ Added {len(scores)} new scores for {game.title()}.")
+        else:
+            print(f"ℹ️ No new {game.title()} scores found.")
 
-            print(f"Added {len(new_scores)
-                           } new scores to the Crossclimb scoreboard.")
 
+
+# 🟡 Background task: Updates both games every 10 minutes
+@tasks.loop(seconds=600)
+async def update_scoreboard_task():
+    await bot.wait_until_ready()  # Wait for bot to be ready before first run
+    try:
+        print("🔁 Updating all game scoreboards...")
+        await scan_and_update_all_games(channel_id=1263813201707929610, message_limit=150)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"⚠️ Error updating scoreboards: {e}")
 
-# Remember to run the bot
-# bot.run('your_token_here')
-
-
-async def queensUpdate():
-    channel = bot.get_channel(1263813201707929610)
-    messages = channel.history(limit=250)
-
-    # Read existing scores and store them in a set
-    existing_scores = set()
-    file_path = "queens_scoreboard.txt"
-
-    if os.path.exists(file_path):
-        with open(file_path, "r") as file:
-            existing_scores = set(line.strip() for line in file)
-
-    new_scores = []
-
-    async for message in messages:
-        if message.content.startswith("Queens"):
-            match = re.search(r'#(\d+)\n(\d+:\d+)', message.content)
-            if match:
-                game_number = match.group(1)
-                time = match.group(2)
-                user = message.author.display_name
-                score_entry = f"Game #{game_number} - {time} - {user}"
-
-                # Append new score if it's not already in the file
-                if score_entry not in existing_scores:
-                    new_scores.append(score_entry)
-
-    # Append new scores to the file
-    if new_scores:
-        with open(file_path, "a") as file:
-            for score in new_scores:
-                file.write(score + "\n")
-
-
-@tasks.loop()
-async def updateQueens():
-    while True:
-        print("Updating scoreboard")
-        await queensUpdate()
-        await asyncio.sleep(600)
-
-
-@bot.command(description="Updates the Queens scoreboard")
+# 🟢 Manual update command: Queens only
+@bot.command(description="Updates All Scoreboard")
 async def update_queens(ctx: commands.Context):
-    await queensUpdate()
-    await ctx.send("Updated Queens scoreboard", ephemeral=True)
+    await scan_and_update_all_games(channel_id=1263813201707929610, message_limit=150)
+    await ctx.send("✅ Updated All scoreboard", ephemeral=True)
 
-
-@bot.command(description="Updates the Crossclimb scoreboard")
-async def update_crossclimb(ctx: commands.Context):
-    await crossclimbUpdate()
-    await ctx.send("Updated Crossclimb scoreboard", ephemeral=True)
 
 
 @bot.command()

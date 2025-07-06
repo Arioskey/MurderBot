@@ -1,7 +1,8 @@
 git+https://github.com/Rapptz/discord.py
-opencv-python==4.6.0.66
+opencv-python
 canvasapi==2.2.0
 html2text==2020.1.16
 pynacl==1.5.0
 fpdf==1.7.2
 pillow
+numpy
